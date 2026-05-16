@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { ConnectionAlert } from "@/components/dashboard/ConnectionAlert";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { createClient } from "@/lib/supabase/server";
 
@@ -21,6 +22,7 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       <DashboardNav email={user.email ?? ""} />
+      <ConnectionAlert />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
     </div>
   );

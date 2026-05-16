@@ -15,6 +15,17 @@ type Client = SupabaseClient<Database>;
 const EXPIRY_SKEW_SECONDS = 60;
 
 /**
+ * Raised when a refresh token is rejected by TrueLayer (revoked/expired
+ * consent). Callers use this to mark the connection as expired.
+ */
+export class TokenRefreshError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TokenRefreshError";
+  }
+}
+
+/**
  * Builds the TrueLayer authorization URL the user is redirected to in order
  * to grant consent. `state` is an opaque CSRF token validated on callback.
  */
@@ -74,7 +85,7 @@ async function requestRefresh(refreshToken: string) {
   });
 
   if (!res.ok) {
-    throw new Error(
+    throw new TokenRefreshError(
       `TrueLayer token refresh failed (${res.status}): ${await res.text()}`,
     );
   }

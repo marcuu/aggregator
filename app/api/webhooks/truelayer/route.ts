@@ -1,35 +1,11 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { syncUser } from "@/lib/truelayer/sync";
+import { verifyWebhookSignature } from "@/lib/truelayer/webhook";
 import { webhookEventSchema } from "@/lib/validators/truelayer";
 
 const SIGNATURE_HEADER = "x-tl-signature";
-
-/** Constant-time comparison of the HMAC-SHA256 body signature. */
-function isValidSignature(rawBody: string, provided: string | null): boolean {
-  const secret = process.env.TRUELAYER_WEBHOOK_SECRET;
-  if (!secret || !provided) return false;
-
-  const expected = createHmac("sha256", secret)
-    .update(rawBody, "utf8")
-    .digest("hex");
-
-  const expectedBuf = Buffer.from(expected, "hex");
-  let providedBuf: Buffer;
-  try {
-    providedBuf = Buffer.from(provided, "hex");
-  } catch {
-    return false;
-  }
-
-  return (
-    expectedBuf.length === providedBuf.length &&
-    timingSafeEqual(expectedBuf, providedBuf)
-  );
-}
 
 /**
  * TrueLayer webhook receiver. Verifies the HMAC signature, and on a
@@ -39,7 +15,13 @@ function isValidSignature(rawBody: string, provided: string | null): boolean {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
-  if (!isValidSignature(rawBody, request.headers.get(SIGNATURE_HEADER))) {
+  const signatureValid = verifyWebhookSignature(
+    rawBody,
+    request.headers.get(SIGNATURE_HEADER),
+    process.env.TRUELAYER_WEBHOOK_SECRET,
+  );
+
+  if (!signatureValid) {
     console.warn("Rejected TrueLayer webhook: invalid signature");
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }

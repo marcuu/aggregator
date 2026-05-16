@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/types/database";
 import type { TablesInsert } from "@/types/database";
-import { refreshToken } from "./auth";
+import { TokenRefreshError, refreshToken } from "./auth";
 import { getAccounts, getBalance, getTransactions } from "./client";
 import type { Transaction } from "@/lib/validators/truelayer";
 
@@ -50,7 +50,21 @@ export async function syncUser(userId: string, client: Client): Promise<void> {
   }
   const connectionId = tokenRow.connection_id;
 
-  const accessToken = await refreshToken(userId, client);
+  let accessToken: string;
+  try {
+    accessToken = await refreshToken(userId, client);
+  } catch (error) {
+    // Consent has lapsed — flag the connection so the UI can prompt a
+    // reconnect, then surface the failure to the caller.
+    if (error instanceof TokenRefreshError) {
+      await client
+        .from("ob_connections")
+        .update({ status: "expired" })
+        .eq("id", connectionId);
+    }
+    throw error;
+  }
+
   const accounts = await getAccounts(accessToken);
 
   for (const account of accounts) {
