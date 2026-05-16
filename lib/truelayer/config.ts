@@ -1,16 +1,38 @@
 /**
- * TrueLayer endpoints and OAuth configuration. Defaults to the sandbox
- * environment used during development (Phases 3–5).
+ * TrueLayer endpoints and OAuth configuration.
+ *
+ * The environment is selected by the TRUELAYER_ENV env var:
+ *   - "live"    → production endpoints + real bank providers
+ *   - "sandbox" → sandbox endpoints + mock providers (default)
  */
 
+const TRUELAYER_ENVS = {
+  sandbox: {
+    authBase: "https://auth.truelayer-sandbox.com",
+    tokenUrl: "https://auth.truelayer-sandbox.com/connect/token",
+    apiBase: "https://api.truelayer-sandbox.com",
+    /** Sandbox mock providers — covers the test banks. */
+    providers: ["uk-cs-mock", "uk-ob-all", "uk-oauth-all"],
+  },
+  live: {
+    authBase: "https://auth.truelayer.com",
+    tokenUrl: "https://auth.truelayer.com/connect/token",
+    apiBase: "https://api.truelayer.com",
+    /** Production providers — real UK Open Banking + OAuth banks. */
+    providers: ["uk-ob-all", "uk-oauth-all"],
+  },
+} as const;
+
+function resolveEnv(): "sandbox" | "live" {
+  return process.env.TRUELAYER_ENV === "live" ? "live" : "sandbox";
+}
+
+const selected = TRUELAYER_ENVS[resolveEnv()];
+
 export const TRUELAYER = {
-  authBase: "https://auth.truelayer-sandbox.com",
-  tokenUrl: "https://auth.truelayer-sandbox.com/connect/token",
-  apiBase: "https://api.truelayer-sandbox.com",
+  ...selected,
   /** Data API scopes required for account + transaction aggregation. */
   scopes: ["info", "accounts", "balance", "transactions", "offline_access"],
-  /** Sandbox mock providers — covers the test banks. */
-  providers: ["uk-cs-mock", "uk-ob-all", "uk-oauth-all"],
 } as const;
 
 export function getTrueLayerEnv() {
