@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { exchangeCode, saveTokens } from "@/lib/truelayer/auth";
 import { getConnectionMetadata } from "@/lib/truelayer/client";
+import { syncUser } from "@/lib/truelayer/sync";
 import { createClient } from "@/lib/supabase/server";
 import { OB_STATE_COOKIE } from "../connect/route";
 
@@ -66,6 +67,14 @@ export async function GET(request: NextRequest) {
     }
 
     await saveTokens(supabase, user.id, tokens, connection.id);
+
+    // Pull an initial set of accounts + transactions. A sync failure here is
+    // non-fatal — the user can retry from the dashboard.
+    try {
+      await syncUser(user.id, supabase);
+    } catch (syncError) {
+      console.error("Initial sync after connect failed:", syncError);
+    }
 
     const response = NextResponse.redirect(
       new URL("/dashboard/accounts", origin),
