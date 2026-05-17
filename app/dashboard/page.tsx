@@ -1,7 +1,9 @@
 import Link from "next/link";
 
+import { BalanceForecastChart } from "@/components/dashboard/BalanceForecastChart";
 import { ConnectBankButton } from "@/components/connect/ConnectBankButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildBalanceTabs } from "@/lib/balance-history";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
 
@@ -12,17 +14,36 @@ export const metadata = {
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  const [{ data: accounts }, { count: txCount }, { count: connectionCount }] =
-    await Promise.all([
-      supabase.from("ob_accounts").select("current_balance, currency"),
-      supabase
-        .from("ob_transactions")
-        .select("id", { count: "exact", head: true }),
-      supabase
-        .from("ob_connections")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "active"),
-    ]);
+  // Balance history is reconstructed by walking current balances backward
+  // through recent transactions, so fetch a little over the chart's window.
+  const today = new Date();
+  const historyCutoff = new Date(
+    today.getTime() - 130 * 86_400_000,
+  ).toISOString();
+
+  const [
+    { data: accounts },
+    { count: txCount },
+    { count: connectionCount },
+    { data: chartTx },
+  ] = await Promise.all([
+    supabase
+      .from("ob_accounts")
+      .select("id, account_type, current_balance, currency"),
+    supabase.from("ob_transactions").select("id", { count: "exact", head: true }),
+    supabase
+      .from("ob_connections")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active"),
+    supabase
+      .from("ob_transactions")
+      .select("account_id, amount, timestamp")
+      .gte("timestamp", historyCutoff)
+      .order("timestamp", { ascending: true }),
+  ]);
+
+  const balanceTabs = buildBalanceTabs(accounts ?? [], chartTx ?? [], today);
+  const todayKey = today.toISOString().slice(0, 10);
 
   // Net worth is summed per currency — mixing currencies into one total
   // would be misleading.
@@ -54,6 +75,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       ) : (
+        <>
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <Card>
             <CardHeader>
@@ -109,6 +131,13 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {(accounts?.length ?? 0) > 0 && (
+          <div className="mt-4">
+            <BalanceForecastChart series={balanceTabs} todayKey={todayKey} />
+          </div>
+        )}
+        </>
       )}
     </div>
   );
