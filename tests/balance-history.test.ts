@@ -53,19 +53,31 @@ describe("buildBalanceSeries", () => {
     expect(byDate.get("2026-03-22")).toBe(1000);
   });
 
-  it("derives a daily rate from the trailing window", () => {
-    // A steady -10/day drift over the history window.
-    const txs = Array.from({ length: 119 }, (_, i) => {
-      const d = new Date(TODAY);
-      d.setUTCDate(d.getUTCDate() - i);
-      return {
-        account_id: "acc-1",
-        amount: -10,
-        timestamp: d.toISOString(),
-      };
-    });
+  it("derives the daily rate from spend/income velocity", () => {
+    // Net -£100 moved across a 10-day span → -£10/day velocity.
+    const txs = [
+      { account_id: "acc-1", amount: -40, timestamp: "2026-03-13T09:00:00Z" },
+      { account_id: "acc-1", amount: -60, timestamp: "2026-03-23T09:00:00Z" },
+    ];
     const series = buildBalanceSeries([account], txs, TODAY);
-    expect(series.dailyRate).toBeCloseTo(-10, 5);
+    expect(series.dailyRate).toBe(-10);
+  });
+
+  it("nets income against spend in the velocity", () => {
+    // +£300 income and -£100 spend over a 10-day span → +£20/day.
+    const txs = [
+      { account_id: "acc-1", amount: 300, timestamp: "2026-03-13T09:00:00Z" },
+      { account_id: "acc-1", amount: -100, timestamp: "2026-03-23T09:00:00Z" },
+    ];
+    const series = buildBalanceSeries([account], txs, TODAY);
+    expect(series.dailyRate).toBe(20);
+  });
+
+  it("reports a zero rate when there is too little history", () => {
+    const txs = [
+      { account_id: "acc-1", amount: -50, timestamp: "2026-03-23T09:00:00Z" },
+    ];
+    expect(buildBalanceSeries([account], txs, TODAY).dailyRate).toBe(0);
   });
 });
 

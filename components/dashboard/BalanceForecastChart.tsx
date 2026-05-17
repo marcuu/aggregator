@@ -16,7 +16,11 @@ const PLOT_B = VB_H - PAD.b;
 const PLOT_W = PLOT_R - PLOT_L;
 const PLOT_H = PLOT_B - PLOT_T;
 
-const MAX_FORWARD_WEEKS = 8;
+const HISTORY_DAYS = 14;
+const FORECAST_DAYS = 14;
+const TOTAL_DAYS = HISTORY_DAYS + FORECAST_DAYS; // 28
+const TODAY_INDEX = HISTORY_DAYS - 1; // 13
+const TICKS = [0, 7, TODAY_INDEX, 20, TOTAL_DAYS - 1];
 const DAY_MS = 86_400_000;
 
 const TAB_LABELS: Record<TabKey, string> = {
@@ -40,11 +44,6 @@ function addDays(d: Date, n: number): Date {
   const r = new Date(d);
   r.setUTCDate(r.getUTCDate() + n);
   return r;
-}
-
-function mondayOf(d: Date): Date {
-  const day = d.getUTCDay(); // 0 Sun .. 6 Sat
-  return addDays(d, day === 0 ? -6 : 1 - day);
 }
 
 function daysBetween(a: Date, b: Date): number {
@@ -105,11 +104,18 @@ function splitAmount(value: number, currency: string) {
   return { main: full.slice(0, idx), dec: full.slice(idx) };
 }
 
+function shortDate(d: Date): string {
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
 type DayCell = {
   index: number;
   date: Date;
   key: string;
-  letter: string;
   balance: number | null;
   forecast: boolean;
 };
@@ -132,7 +138,6 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
   );
 
   const [tab, setTab] = useState<TabKey>("all");
-  const [weekOffset, setWeekOffset] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
   const [editingTarget, setEditingTarget] = useState(false);
 
@@ -150,38 +155,18 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
     return map;
   }, [active]);
 
-  // How far back navigation may go (oldest reconstructed week).
-  const minOffset = useMemo(() => {
-    const first = series.all.points[0];
-    if (!first) return 0;
-    return Math.min(
-      0,
-      daysBetween(mondayOf(today), mondayOf(parseKey(first.date))) / 7,
-    );
-  }, [series.all.points, today]);
-
-  const weekStart = addDays(mondayOf(today), weekOffset * 7);
-
+  // Fixed window: 14 trailing days of history, then 14 days of forecast.
   const cells: DayCell[] = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = addDays(weekStart, i);
-      const key = keyOf(date);
-      const forecast = key > todayKey;
+    const windowStart = addDays(today, -TODAY_INDEX);
+    return Array.from({ length: TOTAL_DAYS }, (_, i) => {
+      const date = addDays(windowStart, i);
+      const forecast = i > TODAY_INDEX;
       const balance = forecast
-        ? active.currentBalance + active.dailyRate * daysBetween(today, date)
-        : (balanceByDate.get(key) ?? null);
-      return {
-        index: i,
-        date,
-        key,
-        letter: "SMTWTFS"[date.getUTCDay()],
-        balance,
-        forecast,
-      };
+        ? active.currentBalance + active.dailyRate * (i - TODAY_INDEX)
+        : (balanceByDate.get(keyOf(date)) ?? null);
+      return { index: i, date, key: keyOf(date), balance, forecast };
     });
-    // weekStart derives from weekOffset; depend on its key instead.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, balanceByDate, todayKey, weekOffset, today]);
+  }, [active, balanceByDate, today]);
 
   const values = cells
     .map((c) => c.balance)
@@ -200,20 +185,20 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
     if (hi === lo) hi = lo + step;
   }
 
-  const xFor = (i: number) => PLOT_L + (i / 6) * PLOT_W;
+  const xFor = (i: number) => PLOT_L + (i / (TOTAL_DAYS - 1)) * PLOT_W;
   const yFor = (v: number) => PLOT_B - ((v - lo) / (hi - lo)) * PLOT_H;
 
   const historyPts = cells
     .filter((c) => !c.forecast && c.balance !== null)
     .map((c) => ({ x: xFor(c.index), y: yFor(c.balance as number) }));
 
-  const todayCell = cells.find((c) => c.key === todayKey);
+  const todayCell = cells[TODAY_INDEX];
   const forecastPts = cells
     .filter((c) => c.forecast && c.balance !== null)
     .map((c) => ({ x: xFor(c.index), y: yFor(c.balance as number) }));
-  if (todayCell?.balance != null && forecastPts.length > 0) {
+  if (todayCell.balance != null && forecastPts.length > 0) {
     forecastPts.unshift({
-      x: xFor(todayCell.index),
+      x: xFor(TODAY_INDEX),
       y: yFor(todayCell.balance),
     });
   }
@@ -237,15 +222,6 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
 
   const balance = splitAmount(active.currentBalance, active.currency);
 
-  const fmtMonth = (d: Date) =>
-    d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
-  const d0 = cells[0].date;
-  const d6 = cells[6].date;
-  const rangeLabel =
-    d0.getUTCMonth() === d6.getUTCMonth()
-      ? `${fmtMonth(d0)} ${d0.getUTCDate()} – ${d6.getUTCDate()}`
-      : `${fmtMonth(d0)} ${d0.getUTCDate()} – ${fmtMonth(d6)} ${d6.getUTCDate()}`;
-
   const wrapRef = useRef<HTMLDivElement>(null);
 
   function handleMove(e: React.MouseEvent) {
@@ -253,15 +229,12 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * VB_W;
-    const i = Math.round(((x - PLOT_L) / PLOT_W) * 6);
-    setHover(Math.min(6, Math.max(0, i)));
+    const i = Math.round(((x - PLOT_L) / PLOT_W) * (TOTAL_DAYS - 1));
+    setHover(Math.min(TOTAL_DAYS - 1, Math.max(0, i)));
   }
 
   const hoverCell = hover !== null ? cells[hover] : null;
   const showHover = hoverCell != null && hoverCell.balance !== null;
-
-  const prevDisabled = weekOffset <= minOffset;
-  const nextDisabled = weekOffset >= MAX_FORWARD_WEEKS;
 
   return (
     <Card className="overflow-hidden">
@@ -333,7 +306,7 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
       {/* Chart */}
       <div
         ref={wrapRef}
-        className="relative mt-2 aspect-[12/5] w-full select-none"
+        className="relative mt-2 mb-1 aspect-[12/5] w-full select-none"
         onMouseMove={handleMove}
         onMouseLeave={() => setHover(null)}
       >
@@ -349,16 +322,17 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
             </linearGradient>
           </defs>
 
-          {/* Vertical day gridlines */}
-          {cells.map((c) => (
+          {/* Weekly gridlines + today divider */}
+          {TICKS.map((i) => (
             <line
-              key={c.key}
-              x1={xFor(c.index)}
-              x2={xFor(c.index)}
+              key={i}
+              x1={xFor(i)}
+              x2={xFor(i)}
               y1={PLOT_T}
               y2={PLOT_B}
-              stroke="#f1f3f5"
+              stroke={i === TODAY_INDEX ? "#d1d5db" : "#f1f3f5"}
               strokeWidth="1"
+              strokeDasharray={i === TODAY_INDEX ? "4 3" : undefined}
             />
           ))}
           {/* Baseline */}
@@ -472,24 +446,32 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
           </span>
         ))}
 
-        {/* X-axis day labels */}
-        {cells.map((c) => (
-          <span
-            key={c.key}
-            className={cn(
-              "absolute -translate-x-1/2 text-xs",
-              c.key === todayKey
-                ? "font-semibold text-gray-900"
-                : "text-gray-400",
-            )}
-            style={{
-              left: `${(xFor(c.index) / VB_W) * 100}%`,
-              top: `${((PLOT_B + 10) / VB_H) * 100}%`,
-            }}
-          >
-            {c.letter}
-          </span>
-        ))}
+        {/* X-axis date labels */}
+        {TICKS.map((i) => {
+          const isToday = i === TODAY_INDEX;
+          const isFirst = i === 0;
+          const isLast = i === TOTAL_DAYS - 1;
+          return (
+            <span
+              key={i}
+              className={cn(
+                "absolute text-xs",
+                isToday ? "font-semibold text-gray-900" : "text-gray-400",
+                isFirst
+                  ? "translate-x-0"
+                  : isLast
+                    ? "-translate-x-full"
+                    : "-translate-x-1/2",
+              )}
+              style={{
+                left: `${(xFor(i) / VB_W) * 100}%`,
+                top: `${((PLOT_B + 10) / VB_H) * 100}%`,
+              }}
+            >
+              {isToday ? "Today" : shortDate(cells[i].date)}
+            </span>
+          );
+        })}
 
         {/* Hover tooltip */}
         {showHover && (
@@ -498,7 +480,13 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
             style={{
               left: `${(xFor(hoverCell.index) / VB_W) * 100}%`,
               top: `${(yFor(hoverCell.balance as number) / VB_H) * 100}%`,
-              transform: "translate(-50%, calc(-100% - 10px))",
+              transform: `translate(${
+                hoverCell.index <= 3
+                  ? "0%"
+                  : hoverCell.index >= TOTAL_DAYS - 4
+                    ? "-100%"
+                    : "-50%"
+              }, calc(-100% - 10px))`,
             }}
           >
             <div className="font-semibold">
@@ -515,29 +503,6 @@ export function BalanceForecastChart({ series, todayKey }: Props) {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Week navigation */}
-      <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
-        <button
-          type="button"
-          onClick={() => setWeekOffset((w) => w - 1)}
-          disabled={prevDisabled}
-          className="rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
-          aria-label="Previous week"
-        >
-          <ChevronIcon direction="left" />
-        </button>
-        <span className="text-sm font-medium text-gray-600">{rangeLabel}</span>
-        <button
-          type="button"
-          onClick={() => setWeekOffset((w) => w + 1)}
-          disabled={nextDisabled}
-          className="rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
-          aria-label="Next week"
-        >
-          <ChevronIcon direction="right" />
-        </button>
       </div>
     </Card>
   );
@@ -558,24 +523,6 @@ function PencilIcon() {
     >
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
-  );
-}
-
-function ChevronIcon({ direction }: { direction: "left" | "right" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d={direction === "left" ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"} />
     </svg>
   );
 }
