@@ -11,7 +11,10 @@ export type BalanceSeries = {
   /** Daily end-of-day balances, ascending by date. */
   points: DayPoint[];
   currency: string;
-  /** Average net daily change over the trailing window — used to forecast. */
+  /**
+   * Net daily change — spend/income velocity over the last
+   * VELOCITY_TX_COUNT transactions — used to project the forecast.
+   */
   dailyRate: number;
   /** Today's combined balance for the accounts in this series. */
   currentBalance: number;
@@ -32,7 +35,8 @@ type TxRow = {
 };
 
 const HISTORY_DAYS = 120;
-const RATE_WINDOW = 30;
+const VELOCITY_TX_COUNT = 1000;
+const DAY_MS = 86_400_000;
 
 export type TabKey = "all" | "checking" | "savings";
 
@@ -65,10 +69,14 @@ export function buildBalanceSeries(
   );
   const currency = accounts.find((a) => a.currency)?.currency ?? "GBP";
 
+  // Transactions belonging to this account group, oldest first.
+  const groupTx = transactions
+    .filter((tx) => accountIds.has(tx.account_id))
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
   // Sum signed transaction amounts per UTC day.
   const txByDay = new Map<string, number>();
-  for (const tx of transactions) {
-    if (!accountIds.has(tx.account_id)) continue;
+  for (const tx of groupTx) {
     const key = tx.timestamp.slice(0, 10);
     txByDay.set(key, (txByDay.get(key) ?? 0) + tx.amount);
   }
@@ -88,21 +96,30 @@ export function buildBalanceSeries(
   }
   points.reverse();
 
-  const window = Math.min(RATE_WINDOW, points.length - 1);
-  let dailyRate = 0;
-  if (window > 0) {
-    const recent = points[points.length - 1].balance;
-    const past = points[points.length - 1 - window].balance;
-    dailyRate = (recent - past) / window;
-  }
-
   return {
     points,
     currency,
-    dailyRate: round2(dailyRate),
+    dailyRate: round2(dailyVelocity(groupTx)),
     currentBalance: round2(currentBalance),
     accountCount: accounts.length,
   };
+}
+
+/**
+ * Net daily change rate (income minus spend) measured across the most
+ * recent VELOCITY_TX_COUNT transactions. Dividing the net amount moved by
+ * the calendar span those transactions cover gives the spend/income
+ * velocity used to project the forecast forward.
+ */
+function dailyVelocity(sortedTx: TxRow[]): number {
+  const recent = sortedTx.slice(-VELOCITY_TX_COUNT);
+  if (recent.length < 2) return 0;
+  const firstMs = new Date(recent[0].timestamp).getTime();
+  const lastMs = new Date(recent[recent.length - 1].timestamp).getTime();
+  const spanDays = (lastMs - firstMs) / DAY_MS;
+  if (spanDays <= 0) return 0;
+  const net = recent.reduce((sum, tx) => sum + tx.amount, 0);
+  return net / spanDays;
 }
 
 /** Builds the per-tab series the chart consumes from raw account/tx rows. */
