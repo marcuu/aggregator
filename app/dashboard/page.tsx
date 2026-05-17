@@ -25,7 +25,7 @@ export default async function DashboardPage() {
     { data: accounts },
     { count: txCount },
     { count: connectionCount },
-    { data: chartTx },
+    chartTx,
   ] = await Promise.all([
     supabase
       .from("ob_accounts")
@@ -35,14 +35,10 @@ export default async function DashboardPage() {
       .from("ob_connections")
       .select("id", { count: "exact", head: true })
       .eq("status", "active"),
-    supabase
-      .from("ob_transactions")
-      .select("account_id, amount, timestamp")
-      .gte("timestamp", historyCutoff)
-      .order("timestamp", { ascending: true }),
+    fetchTransactionsSince(supabase, historyCutoff),
   ]);
 
-  const balanceTabs = buildBalanceTabs(accounts ?? [], chartTx ?? [], today);
+  const balanceTabs = buildBalanceTabs(accounts ?? [], chartTx, today);
   const todayKey = today.toISOString().slice(0, 10);
 
   // Net worth is summed per currency — mixing currencies into one total
@@ -141,4 +137,36 @@ export default async function DashboardPage() {
       )}
     </div>
   );
+}
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+type ChartTransaction = {
+  account_id: string;
+  amount: number;
+  timestamp: string;
+};
+
+/**
+ * Fetches every transaction since `cutoff`, paging past PostgREST's 1000-row
+ * response cap — the balance reconstruction needs the full set or the
+ * running balance drifts.
+ */
+async function fetchTransactionsSince(
+  supabase: SupabaseServerClient,
+  cutoff: string,
+): Promise<ChartTransaction[]> {
+  const PAGE = 1000;
+  const rows: ChartTransaction[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("ob_transactions")
+      .select("account_id, amount, timestamp")
+      .gte("timestamp", cutoff)
+      .order("timestamp", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return rows;
 }
