@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      goals: {
+        Row: {
+          created_at: string
+          deposit_pct: number | null
+          id: string
+          is_active: boolean
+          rough_target_date: string | null
+          saved_amount: number
+          target_amount: number
+          target_region: string | null
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deposit_pct?: number | null
+          id?: string
+          is_active?: boolean
+          rough_target_date?: string | null
+          saved_amount?: number
+          target_amount: number
+          target_region?: string | null
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deposit_pct?: number | null
+          id?: string
+          is_active?: boolean
+          rough_target_date?: string | null
+          saved_amount?: number
+          target_amount?: number
+          target_region?: string | null
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ob_accounts: {
         Row: {
           account_type: string | null
@@ -221,6 +263,122 @@ export type Database = {
           full_name?: string | null
           id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      salary_benchmarks: {
+        Row: {
+          age: number
+          id: string
+          salary_p25: number
+          salary_p50: number
+          salary_p75: number
+          sector: string
+          tier: string
+        }
+        Insert: {
+          age: number
+          id?: string
+          salary_p25: number
+          salary_p50: number
+          salary_p75: number
+          sector: string
+          tier: string
+        }
+        Update: {
+          age?: number
+          id?: string
+          salary_p25?: number
+          salary_p50?: number
+          salary_p75?: number
+          sector?: string
+          tier?: string
+        }
+        Relationships: []
+      }
+      trajectory_snapshots: {
+        Row: {
+          borrowing_score: number
+          created_at: string
+          goal_id: string
+          growth_score: number
+          id: string
+          monthly_surplus: number
+          saved_amount: number
+          snapshot_date: string
+          spending_score: number
+          trajectory_age: number
+          user_id: string
+        }
+        Insert: {
+          borrowing_score: number
+          created_at?: string
+          goal_id: string
+          growth_score: number
+          id?: string
+          monthly_surplus: number
+          saved_amount: number
+          snapshot_date: string
+          spending_score: number
+          trajectory_age: number
+          user_id: string
+        }
+        Update: {
+          borrowing_score?: number
+          created_at?: string
+          goal_id?: string
+          growth_score?: number
+          id?: string
+          monthly_surplus?: number
+          saved_amount?: number
+          snapshot_date?: string
+          spending_score?: number
+          trajectory_age?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trajectory_snapshots_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_profiles: {
+        Row: {
+          created_at: string
+          current_salary: number
+          date_of_birth: string | null
+          onboarding_complete: boolean
+          onboarding_step: number
+          sector: string
+          trajectory_tier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_salary: number
+          date_of_birth?: string | null
+          onboarding_complete?: boolean
+          onboarding_step?: number
+          sector: string
+          trajectory_tier: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_salary?: number
+          date_of_birth?: string | null
+          onboarding_complete?: boolean
+          onboarding_step?: number
+          sector?: string
+          trajectory_tier?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
