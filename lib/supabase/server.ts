@@ -1,8 +1,17 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { createServerClient } from "@supabase/ssr";
 
 import type { Database } from "@/types/database";
+
+/**
+ * The authenticated user id, as validated by middleware and forwarded on the
+ * `x-user-id` request header. Returns null when there is no authenticated
+ * user. Lets server actions and pages skip a redundant auth round-trip.
+ */
+export async function getRequestUserId(): Promise<string | null> {
+  return (await headers()).get("x-user-id");
+}
 
 export async function createClient() {
   const cookieStore = await cookies();

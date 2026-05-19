@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getRequestUserId } from "@/lib/supabase/server";
 import { calculateTrajectoryAge } from "@/lib/trajectory/engine";
 import type { BenchmarkRow } from "@/lib/trajectory/benchmarks";
 import { getTransactionsForUser } from "@/lib/truelayer/transactions";
@@ -24,22 +24,20 @@ const GOAL_LABEL: Record<GoalType, string> = {
 };
 
 export default async function Reveal() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const userId = await getRequestUserId();
+  if (!userId) redirect("/login");
 
+  const supabase = await createClient();
   const [{ data: profileRow }, { data: goalRows }] = await Promise.all([
     supabase
       .from("user_profiles")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle(),
     supabase
       .from("goals")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("is_active", true),
   ]);
 
@@ -59,7 +57,7 @@ export default async function Reveal() {
     .eq("sector", profile.sector)
     .eq("tier", profile.trajectory_tier);
 
-  const transactions = await getTransactionsForUser(user.id, supabase);
+  const transactions = await getTransactionsForUser(userId, supabase);
 
   // The engine works in pence; goal amounts are stored in whole pounds.
   const goalInPence = {

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getRequestUserId } from "@/lib/supabase/server";
 import { getTransactionsForUser } from "@/lib/truelayer/transactions";
 import type { Transaction } from "@/lib/trajectory/types";
 import type { GoalType } from "@/lib/validators/goals";
@@ -22,13 +22,16 @@ const EXPENSES_WINDOW_DAYS = 90;
 /** Fallback monthly expenses (pounds) when there is no transaction history. */
 const DEFAULT_MONTHLY_EXPENSES = 1500;
 
+/**
+ * Resolves the authenticated user from the middleware-set header — no auth
+ * round-trip. The cookie-scoped client still carries the JWT, so RLS is
+ * enforced on every query below.
+ */
 async function requireUser() {
+  const userId = await getRequestUserId();
+  if (!userId) redirect("/login");
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  return { supabase, user };
+  return { supabase, userId };
 }
 
 export async function submitStep1(formData: FormData) {
@@ -37,19 +40,15 @@ export async function submitStep1(formData: FormData) {
     sector: formData.get("sector"),
   });
 
-  const { supabase, user } = await requireUser();
+  const { supabase, userId } = await requireUser();
 
-  const { data: existing } = await supabase
-    .from("user_profiles")
-    .select("trajectory_tier")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
+  // trajectory_tier is set for real on step 2, which always follows — a
+  // placeholder here avoids a read-back to preserve an existing value.
   await supabase.from("user_profiles").upsert({
-    user_id: user.id,
+    user_id: userId,
     current_salary: parsed.current_salary,
     sector: parsed.sector,
-    trajectory_tier: existing?.trajectory_tier ?? "steady",
+    trajectory_tier: "steady",
     onboarding_step: 2,
   });
 
@@ -61,12 +60,12 @@ export async function submitStep2(formData: FormData) {
     trajectory_tier: formData.get("trajectory_tier"),
   });
 
-  const { supabase, user } = await requireUser();
+  const { supabase, userId } = await requireUser();
 
   await supabase
     .from("user_profiles")
     .update({ trajectory_tier: parsed.trajectory_tier, onboarding_step: 3 })
-    .eq("user_id", user.id);
+    .eq("user_id", userId);
 
   redirect("/onboarding/3");
 }
@@ -77,12 +76,12 @@ export async function submitStep3(formData: FormData) {
     .filter(Boolean);
   const parsed = Step3Schema.parse({ goal_types: raw });
 
-  const { supabase, user } = await requireUser();
+  const { supabase, userId } = await requireUser();
 
   await supabase
     .from("user_profiles")
     .update({ onboarding_step: 4 })
-    .eq("user_id", user.id);
+    .eq("user_id", userId);
 
   redirect(`/onboarding/4?types=${parsed.goal_types.join(",")}`);
 }
@@ -94,26 +93,26 @@ export async function submitStep4(formData: FormData) {
       .filter(Boolean),
   }).goal_types;
 
-  const { supabase, user } = await requireUser();
+  const { supabase, userId } = await requireUser();
 
   const goals: TablesInsert<"goals">[] = [];
 
   for (const type of types) {
     goals.push({
-      user_id: user.id,
-      ...(await buildGoal(type, formData, user.id, supabase)),
+      user_id: userId,
+      ...(await buildGoal(type, formData, userId, supabase)),
     });
   }
 
   // Replace any goals from a previous run so the unique / max-active
   // constraints cannot trip on a redo of onboarding.
-  await supabase.from("goals").delete().eq("user_id", user.id);
+  await supabase.from("goals").delete().eq("user_id", userId);
   await supabase.from("goals").insert(goals);
 
   await supabase
     .from("user_profiles")
     .update({ onboarding_complete: true, onboarding_step: 5 })
-    .eq("user_id", user.id);
+    .eq("user_id", userId);
 
   redirect("/onboarding/reveal");
 }
