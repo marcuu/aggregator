@@ -24,3 +24,36 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Trajectory design system ------------------------------------------------ */
+
+:root {
+  --surface-primary: #ffffff;
+  --surface-secondary: #f6f6f5;
+  --text-primary: #171717;
+  --text-secondary: rgba(23, 23, 23, 0.6);
+  --text-tertiary: rgba(23, 23, 23, 0.4);
+  --border-subtle: rgba(23, 23, 23, 0.15);
+  --score-spending: #e24b4a;
+  --score-growth: #639922;
+  --score-borrowing: #378add;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-primary: #0a0a0a;
+    --surface-secondary: #171717;
+    --text-primary: #ededed;
+    --text-secondary: rgba(237, 237, 237, 0.6);
+    --text-tertiary: rgba(237, 237, 237, 0.4);
+    --border-subtle: rgba(237, 237, 237, 0.15);
+  }
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
