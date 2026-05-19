@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getRequestUserId } from "@/lib/supabase/server";
 import { ProgressDots } from "@/components/onboarding/ProgressDots";
 import { submitStep1 } from "../actions";
 
@@ -16,16 +16,14 @@ const fieldClass =
   "mt-1.5 w-full rounded-lg border bg-transparent px-3 py-2.5 text-[15px]";
 
 export default async function Step1() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const userId = await getRequestUserId();
+  if (!userId) redirect("/login");
 
+  const supabase = await createClient();
   const { data: profile } = await supabase
     .from("user_profiles")
     .select("current_salary, sector")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   return (
