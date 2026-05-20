@@ -1,6 +1,8 @@
 import type { Goal } from "@/lib/validators/goals";
 import type { TrajectoryResult } from "./types";
 
+type GoalEntry = { goal: Goal; trajectory: TrajectoryResult };
+
 export type ResolutionOption = {
   id: string;
   description: string;
@@ -25,36 +27,17 @@ export type CollisionResult = {
 const COLLISION_WINDOW_MONTHS = 24;
 
 /**
- * Effective months until a goal completes. The user's `rough_target_date`
- * is treated as a "do not start earlier than" intent: if it falls after the
- * projected completion, the goal is parked until then and the later date is
- * what actually competes for surplus.
- */
-function effectiveMonthsToGoal(
-  entry: { goal: Goal; trajectory: TrajectoryResult },
-  asOfDate: Date,
-): number {
-  const projected = entry.trajectory.monthsToGoal;
-  const rough = entry.goal.rough_target_date;
-  if (!rough) return projected;
-  const target = new Date(rough);
-  const monthsUntilRough =
-    (target.getFullYear() - asOfDate.getFullYear()) * 12 +
-    (target.getMonth() - asOfDate.getMonth());
-  return Math.max(projected, monthsUntilRough);
-}
-
-/**
  * Detect whether two goals collide — i.e. their completion windows are close
- * enough that funding both at once strains the same surplus.
+ * enough that funding both at once strains the same surplus. `monthsToGoal`
+ * already reflects the user's `rough_target_date` (see engine), so this is a
+ * straight comparison.
  */
 export function detectCollision(
-  goal1: { goal: Goal; trajectory: TrajectoryResult },
-  goal2: { goal: Goal; trajectory: TrajectoryResult },
-  asOfDate: Date = new Date(),
+  goal1: GoalEntry,
+  goal2: GoalEntry,
 ): CollisionResult {
-  const months1 = effectiveMonthsToGoal(goal1, asOfDate);
-  const months2 = effectiveMonthsToGoal(goal2, asOfDate);
+  const months1 = goal1.trajectory.monthsToGoal;
+  const months2 = goal2.trajectory.monthsToGoal;
   const diff = Math.abs(months1 - months2);
 
   if (diff >= COLLISION_WINDOW_MONTHS) {

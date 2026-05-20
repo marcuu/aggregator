@@ -116,6 +116,35 @@ describe("calculateTrajectoryAge", () => {
     expect(withPct.monthsToGoal).toBe(direct.monthsToGoal);
   });
 
+  it("honours a rough_target_date that pushes completion past the projection", () => {
+    // Projection alone would land at 41 months; user has parked the goal for
+    // ~5 years out — that later date is what actually competes for surplus.
+    const transactions = monthlyTransactions(300_000, 255_000);
+    const result = calculateTrajectoryAge(
+      makeProfile(),
+      makeGoal({ rough_target_date: "2031-05-18" }),
+      transactions,
+      lawFastBenchmarks,
+      AS_OF,
+    );
+
+    expect(result.monthsToGoal).toBe(60);
+    expect(result.trajectoryAge).toBeCloseTo(30.0, 1);
+  });
+
+  it("ignores a rough_target_date that is earlier than the projection", () => {
+    const transactions = monthlyTransactions(300_000, 255_000);
+    const result = calculateTrajectoryAge(
+      makeProfile(),
+      makeGoal({ rough_target_date: "2026-11-18" }),
+      transactions,
+      lawFastBenchmarks,
+      AS_OF,
+    );
+
+    expect(result.monthsToGoal).toBe(41);
+  });
+
   it("does not crash when benchmarks are missing", () => {
     const result = calculateTrajectoryAge(
       makeProfile(),
