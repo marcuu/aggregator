@@ -11,6 +11,7 @@ import {
   EmergencyFundDetailsSchema,
   HomeDetailsSchema,
   InvestStartDetailsSchema,
+  Step0Schema,
   Step1Schema,
   Step2Schema,
   Step3Schema,
@@ -32,6 +33,27 @@ async function requireUser() {
   if (!userId) redirect("/login");
   const supabase = await createClient();
   return { supabase, userId };
+}
+
+export async function submitStep0(formData: FormData) {
+  const parsed = Step0Schema.parse({
+    date_of_birth: formData.get("date_of_birth"),
+  });
+
+  const { supabase, userId } = await requireUser();
+
+  // Profile may not exist yet — upsert with placeholder values for the
+  // non-nullable columns that are filled in properly during step 1.
+  await supabase.from("user_profiles").upsert({
+    user_id: userId,
+    date_of_birth: parsed.date_of_birth,
+    sector: "other",
+    trajectory_tier: "steady",
+    current_salary: 1,
+    onboarding_step: 1,
+  });
+
+  redirect("/onboarding/1");
 }
 
 export async function submitStep1(formData: FormData) {

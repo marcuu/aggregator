@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { ProgressDots } from "@/components/onboarding/ProgressDots";
+import { CurrencyInput } from "@/components/onboarding/CurrencyInput";
 import { Step3Schema } from "@/lib/validators/onboarding";
 import type { GoalType } from "@/lib/validators/goals";
 import { submitStep4 } from "../actions";
@@ -36,7 +37,7 @@ export default async function Step4({
 
   return (
     <>
-      <ProgressDots current={4} total={5} />
+      <ProgressDots current={5} total={6} />
       <h1 className="mt-8 text-2xl font-medium">The detail that matters</h1>
       <p className="mt-2 text-[14px]" style={{ color: "var(--text-secondary)" }}>
         A few specifics per goal so the projection is yours, not an average.
@@ -85,9 +86,9 @@ function GoalFields({ type }: { type: GoalType }) {
             label="Target region"
             placeholder="Manchester"
           />
-          <NumberField
+          <CurrencyInput
             name="home__target_amount"
-            label="Target property value (£)"
+            label="Target property value"
             placeholder="320000"
           />
           <RadioGroup
@@ -105,9 +106,9 @@ function GoalFields({ type }: { type: GoalType }) {
     case "wedding":
       return (
         <>
-          <NumberField
+          <CurrencyInput
             name="wedding__budget"
-            label="Budget (£)"
+            label="Budget"
             placeholder="25000"
           />
           <NumberField
@@ -134,9 +135,9 @@ function GoalFields({ type }: { type: GoalType }) {
       );
     case "invest_start":
       return (
-        <NumberField
+        <CurrencyInput
           name="invest_start__monthly_contribution"
-          label="Monthly contribution (£)"
+          label="Monthly contribution"
           placeholder="400"
         />
       );

@@ -16,7 +16,8 @@ export default async function Home() {
     .maybeSingle();
 
   if (!profile || !profile.onboarding_complete) {
-    const step = Math.min(4, Math.max(1, profile?.onboarding_step ?? 1));
+    if (!profile) redirect("/onboarding/0");
+    const step = Math.min(4, Math.max(1, profile.onboarding_step));
     redirect(`/onboarding/${step}`);
   }
 
