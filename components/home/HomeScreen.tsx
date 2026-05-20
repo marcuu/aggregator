@@ -104,7 +104,16 @@ function Dashboard({ data }: { data: DashboardResponse }) {
 
       {data.goals.length > 0 && (
         <section>
-          <h2 className="section-label">Your goals</h2>
+          <div className="flex items-baseline justify-between">
+            <h2 className="section-label">Your goals</h2>
+            <Link
+              href="/trajectory"
+              className="text-[12px]"
+              style={{ color: "var(--text-tertiary)" }}
+            >
+              View timeline →
+            </Link>
+          </div>
           <div className="mt-3 flex flex-col gap-3">
             {data.goals.map((entry) => (
               <GoalCard
