@@ -118,7 +118,7 @@ export async function GET() {
 
   const collision =
     goalTrajectories.length === 2
-      ? detectCollision(goalTrajectories[0], goalTrajectories[1])
+      ? detectCollision(goalTrajectories[0], goalTrajectories[1], asOfDate)
       : null;
 
   const baseAge = goalTrajectories[0]?.trajectory.trajectoryAge ?? 0;
