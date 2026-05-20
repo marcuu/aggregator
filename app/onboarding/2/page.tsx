@@ -35,7 +35,7 @@ export default async function Step2() {
 
   return (
     <>
-      <ProgressDots current={2} />
+      <ProgressDots current={2} total={5} />
       <h1 className="mt-8 text-2xl font-medium">How fast are you moving?</h1>
       <p className="mt-2 text-[14px]" style={{ color: "var(--text-secondary)" }}>
         Pick the trajectory that matches your ambition. You can recalibrate

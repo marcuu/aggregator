@@ -1,7 +1,7 @@
 import type { UserProfile } from "@/lib/validators/profile";
 import type { Goal } from "@/lib/validators/goals";
 import type { Transaction, TrajectoryResult } from "./types";
-import { projectSalary, type BenchmarkRow } from "./benchmarks";
+import { calculateCohortPercentile, projectSalary, type BenchmarkRow } from "./benchmarks";
 import { calculateMonthlySurplus } from "./surplus";
 
 /** Conservative blended cash ISA / LISA rate. */
@@ -30,6 +30,11 @@ export function calculateTrajectoryAge(
   const savedAmount = goal.saved_amount;
   const targetAmount = computeTargetAmount(goal);
   const currentAge = ageAtDate(profile.date_of_birth, asOfDate);
+  const cohortPercentile = calculateCohortPercentile(
+    profile.current_salary,
+    currentAge,
+    benchmarks,
+  );
 
   if (targetAmount - savedAmount <= 0) {
     return {
@@ -37,7 +42,7 @@ export function calculateTrajectoryAge(
       monthlySurplus,
       savedAmount,
       monthsToGoal: 0,
-      cohortPercentile: null,
+      cohortPercentile,
     };
   }
 

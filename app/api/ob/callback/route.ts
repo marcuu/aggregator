@@ -4,7 +4,7 @@ import { exchangeCode, saveTokens } from "@/lib/truelayer/auth";
 import { getConnectionMetadata } from "@/lib/truelayer/client";
 import { syncUser } from "@/lib/truelayer/sync";
 import { createClient } from "@/lib/supabase/server";
-import { OB_STATE_COOKIE } from "../connect/route";
+import { OB_RETURN_TO_COOKIE, OB_STATE_COOKIE } from "../connect/route";
 
 function redirectWithError(origin: string, reason: string) {
   const url = new URL("/dashboard/connect", origin);
@@ -76,10 +76,13 @@ export async function GET(request: NextRequest) {
       console.error("Initial sync after connect failed:", syncError);
     }
 
-    const response = NextResponse.redirect(
-      new URL("/dashboard/accounts", origin),
-    );
+    const returnTo = request.cookies.get(OB_RETURN_TO_COOKIE)?.value;
+    const successPath =
+      returnTo === "onboarding" ? "/onboarding/reveal" : "/dashboard/accounts";
+
+    const response = NextResponse.redirect(new URL(successPath, origin));
     response.cookies.delete(OB_STATE_COOKIE);
+    response.cookies.delete(OB_RETURN_TO_COOKIE);
     return response;
   } catch (error) {
     console.error("TrueLayer callback failed:", error);
