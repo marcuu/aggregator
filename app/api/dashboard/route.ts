@@ -40,6 +40,7 @@ export async function GET() {
     { data: lastSnapshot },
     { count: activeConnections },
     { count: expiredConnections },
+    { data: accountRows },
   ] = await Promise.all([
     supabase.from("user_profiles").select("*").eq("user_id", user.id).maybeSingle(),
     supabase
@@ -65,6 +66,10 @@ export async function GET() {
       .from("ob_connections")
       .select("id", { count: "exact", head: true })
       .eq("status", "expired"),
+    supabase
+      .from("ob_accounts")
+      .select("current_balance")
+      .eq("user_id", user.id),
   ]);
 
   if (!profileRow) {
@@ -76,6 +81,10 @@ export async function GET() {
   const benchmarks = (benchmarkRows ?? []) as BenchmarkRow[];
   const transactions = await getTransactionsForUser(user.id, supabase);
   const asOfDate = new Date();
+
+  // ob_accounts stores balances in pounds; engine works in pence.
+  const currentBalancePence = (accountRows ?? [])
+    .reduce((sum, a) => sum + Math.round((a.current_balance ?? 0) * 100), 0);
 
   const goalTrajectories = goals.map((goal) => ({
     goal,
@@ -99,7 +108,7 @@ export async function GET() {
       }
     : null;
 
-  const scores = calculateScores(profile, transactions, previousScores);
+  const scores = calculateScores(profile, transactions, previousScores, currentBalancePence);
 
   const collision =
     goalTrajectories.length === 2

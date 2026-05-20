@@ -18,6 +18,39 @@ export type TrajectoryResult = {
   cohortPercentile: number | null;
 };
 
+export type SpendingBreakdown = {
+  /** Essential spend (rent, utilities, groceries, transport) as % of income. Target ≤50%. */
+  essentialRatio: number;
+  /** Discretionary spend (dining, entertainment, shopping, travel) as % of income. Target ≤30%. */
+  discretionaryRatio: number;
+  /** CV of monthly total spend — rewards stable, predictable outgoings. */
+  consistency: number;
+  /** Evenness of discretionary spend across the 4 weeks of the prior month. */
+  velocity: number;
+};
+
+export type GrowthBreakdown = {
+  /** (Income − spend) / income. Target ≥20%. */
+  savingsRate: number;
+  /** Direction of savings rate over the last two 30-day windows. */
+  savingsTrend: number;
+  /** Liquid balance expressed as months of spend. Target ≥3 months. */
+  emergencyBuffer: number;
+  /** Investment / pension contributions as % of income. Target ≥10%. */
+  investmentAllocation: number;
+};
+
+export type BorrowingBreakdown = {
+  /** Loan repayments / income. Target ≤20%. */
+  debtServiceRatio: number;
+  /** Direction of debt service ratio over the last two 30-day windows. */
+  debtTrajectory: number;
+  /** Fraction of the last 3 months that contained a loan repayment. */
+  repaymentConsistency: number;
+  /** Monthly repayments relative to total liquid balance. */
+  debtToBalance: number;
+};
+
 export type Scores = {
   spending: number;
   growth: number;
@@ -25,6 +58,9 @@ export type Scores = {
   spendingDelta: number;
   growthDelta: number;
   borrowingDelta: number;
+  spendingBreakdown?: SpendingBreakdown;
+  growthBreakdown?: GrowthBreakdown;
+  borrowingBreakdown?: BorrowingBreakdown;
 };
 
 export type ActionEffort = "low" | "medium" | "high";
