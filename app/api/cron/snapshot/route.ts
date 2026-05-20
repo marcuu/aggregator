@@ -59,7 +59,15 @@ export async function GET(request: NextRequest) {
       profile.user_id,
       supabase,
     );
-    const scores = calculateScores(profile, transactions, null);
+
+    const { data: accountRows } = await supabase
+      .from("ob_accounts")
+      .select("current_balance")
+      .eq("user_id", profile.user_id);
+    const currentBalancePence = (accountRows ?? [])
+      .reduce((sum, a) => sum + Math.round((a.current_balance ?? 0) * 100), 0);
+
+    const scores = calculateScores(profile, transactions, null, currentBalancePence);
 
     for (const goalRow of goalRows ?? []) {
       const goal = GoalSchema.parse(goalRow);

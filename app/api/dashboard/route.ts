@@ -88,6 +88,10 @@ export async function GET() {
   const transactions = await getTransactionsForUser(user.id, supabase);
   const asOfDate = new Date();
 
+  // ob_accounts stores balances in pounds; engine works in pence.
+  const currentBalancePence = (accountRows ?? [])
+    .reduce((sum, a) => sum + Math.round((a.current_balance ?? 0) * 100), 0);
+
   const goalTrajectories = goals.map((goal) => ({
     goal,
     trajectory: calculateTrajectoryAge(
@@ -110,7 +114,7 @@ export async function GET() {
       }
     : null;
 
-  const scores = calculateScores(profile, transactions, previousScores);
+  const scores = calculateScores(profile, transactions, previousScores, currentBalancePence);
 
   const collision =
     goalTrajectories.length === 2

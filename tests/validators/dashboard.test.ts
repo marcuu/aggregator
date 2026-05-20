@@ -64,6 +64,16 @@ const validResponse = {
   ],
   institutionCount: 1,
   truelayerExpired: false,
+  accounts: [
+    {
+      id: "aaaa1111-0000-4000-8000-000000000001",
+      display_name: "Current Account",
+      account_type: "checking",
+      currency: "GBP",
+      current_balance: 2500.0,
+      institution_name: "Monzo",
+    },
+  ],
 };
 
 describe("DashboardResponseSchema", () => {
