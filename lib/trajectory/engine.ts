@@ -37,11 +37,12 @@ export function calculateTrajectoryAge(
   );
 
   if (targetAmount - savedAmount <= 0) {
+    const months = monthsUntilRough(goal.rough_target_date, asOfDate);
     return {
-      trajectoryAge: roundTo(currentAge, 1),
+      trajectoryAge: roundTo(currentAge + months / 12, 1),
       monthlySurplus,
       savedAmount,
-      monthsToGoal: 0,
+      monthsToGoal: months,
       cohortPercentile,
     };
   }
@@ -73,13 +74,29 @@ export function calculateTrajectoryAge(
       runningSaved * (1 + SAVINGS_INTEREST_RATE / 12) + surplusThisMonth;
   }
 
+  // Honour the user's rough_target_date as a "do not start earlier than" intent.
+  // If they parked the goal further out, that's when it actually completes.
+  const effectiveMonths = Math.max(
+    monthsElapsed,
+    monthsUntilRough(goal.rough_target_date, asOfDate),
+  );
+
   return {
-    trajectoryAge: roundTo(currentAge + monthsElapsed / 12, 1),
+    trajectoryAge: roundTo(currentAge + effectiveMonths / 12, 1),
     monthlySurplus,
     savedAmount,
-    monthsToGoal: monthsElapsed,
+    monthsToGoal: effectiveMonths,
     cohortPercentile,
   };
+}
+
+function monthsUntilRough(rough: string | null, asOfDate: Date): number {
+  if (!rough) return 0;
+  const target = new Date(rough);
+  const months =
+    (target.getFullYear() - asOfDate.getFullYear()) * 12 +
+    (target.getMonth() - asOfDate.getMonth());
+  return Math.max(0, months);
 }
 
 /** Age in fractional years at the given date. Falls back to 22 with no DOB. */
