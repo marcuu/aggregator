@@ -42,6 +42,12 @@ export const CollisionResultSchema = z.object({
   collides: z.boolean(),
   overlapMonths: z.number(),
   resolutionOptions: z.array(ResolutionOptionSchema),
+  goalAId: z.string().uuid().optional(),
+  goalAType: z.string().optional(),
+  goalAMonthsToGoal: z.number().optional(),
+  goalBId: z.string().uuid().optional(),
+  goalBType: z.string().optional(),
+  goalBMonthsToGoal: z.number().optional(),
 });
 
 export const PromptCardSchema = z.object({
