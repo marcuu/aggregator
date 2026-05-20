@@ -132,7 +132,7 @@ export async function submitStep4(formData: FormData) {
       const goalForEngine = {
         id: "00000000-0000-0000-0000-000000000000",
         user_id: userId,
-        type: goal.type,
+        type: goal.type as GoalType,
         target_amount: (goal.target_amount ?? 0) * 100,
         saved_amount: 0,
         deposit_pct: goal.deposit_pct ?? null,
