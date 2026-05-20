@@ -36,9 +36,11 @@ type LoadState =
 
 export function HomeScreen() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setState({ status: "loading" });
     fetch("/api/dashboard")
       .then((r) => r.json())
       .then((json) => {
@@ -56,18 +58,20 @@ export function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshKey]);
 
   return (
     <main className="mx-auto flex w-full max-w-[440px] flex-1 flex-col gap-5 px-5 pb-12 pt-7">
       {state.status === "loading" && <LoadingState />}
       {state.status === "error" && <ErrorState />}
-      {state.status === "ready" && <Dashboard data={state.data} />}
+      {state.status === "ready" && (
+        <Dashboard data={state.data} onRefresh={() => setRefreshKey((k) => k + 1)} />
+      )}
     </main>
   );
 }
 
-function Dashboard({ data }: { data: DashboardResponse }) {
+function Dashboard({ data, onRefresh }: { data: DashboardResponse; onRefresh: () => void }) {
   return (
     <>
       <header>
@@ -98,7 +102,13 @@ function Dashboard({ data }: { data: DashboardResponse }) {
         <AccountsSection accounts={data.accounts} />
       )}
 
-      {data.collision && <CollisionStrip collision={data.collision} />}
+      {data.collision && (
+        <CollisionStrip
+          collision={data.collision}
+          goals={data.goals.map((g) => g.goal)}
+          onResolved={onRefresh}
+        />
+      )}
 
       <PromptCardList cards={data.promptCards} />
 

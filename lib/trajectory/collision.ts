@@ -11,6 +11,14 @@ export type CollisionResult = {
   collides: boolean;
   overlapMonths: number;
   resolutionOptions: ResolutionOption[];
+  /** Goal that finishes first. Only set when collides === true. */
+  goalAId?: string;
+  goalAType?: string;
+  goalAMonthsToGoal?: number;
+  /** Goal that finishes later. Only set when collides === true. */
+  goalBId?: string;
+  goalBType?: string;
+  goalBMonthsToGoal?: number;
 };
 
 /** Goals whose completion dates fall within this gap are treated as colliding. */
@@ -24,9 +32,6 @@ export function detectCollision(
   goal1: { goal: Goal; trajectory: TrajectoryResult },
   goal2: { goal: Goal; trajectory: TrajectoryResult },
 ): CollisionResult {
-  void goal1.goal;
-  void goal2.goal;
-
   const diff = Math.abs(
     goal1.trajectory.monthsToGoal - goal2.trajectory.monthsToGoal,
   );
@@ -35,14 +40,19 @@ export function detectCollision(
     return { collides: false, overlapMonths: 0, resolutionOptions: [] };
   }
 
+  // goalA finishes first, goalB finishes later
+  const [entryA, entryB] =
+    goal1.trajectory.monthsToGoal <= goal2.trajectory.monthsToGoal
+      ? [goal1, goal2]
+      : [goal2, goal1];
+
   return {
     collides: true,
     overlapMonths: COLLISION_WINDOW_MONTHS - diff,
     resolutionOptions: [
       {
         id: "sequence",
-        description:
-          "Sequence goals — complete first before starting second",
+        description: "Sequence goals — complete first before starting second",
         yearsImpact: 0,
       },
       {
@@ -56,5 +66,11 @@ export function detectCollision(
         yearsImpact: 0,
       },
     ],
+    goalAId: entryA.goal.id,
+    goalAType: entryA.goal.type,
+    goalAMonthsToGoal: entryA.trajectory.monthsToGoal,
+    goalBId: entryB.goal.id,
+    goalBType: entryB.goal.type,
+    goalBMonthsToGoal: entryB.trajectory.monthsToGoal,
   };
 }
