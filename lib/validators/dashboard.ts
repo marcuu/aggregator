@@ -5,6 +5,27 @@ import { SectorSchema, TrajectoryTierSchema } from "./profile";
 
 /** Response contract for GET /api/dashboard, parsed on the client. */
 
+export const SpendingBreakdownSchema = z.object({
+  essentialRatio: z.number(),
+  discretionaryRatio: z.number(),
+  consistency: z.number(),
+  velocity: z.number(),
+});
+
+export const GrowthBreakdownSchema = z.object({
+  savingsRate: z.number(),
+  savingsTrend: z.number(),
+  emergencyBuffer: z.number(),
+  investmentAllocation: z.number(),
+});
+
+export const BorrowingBreakdownSchema = z.object({
+  debtServiceRatio: z.number(),
+  debtTrajectory: z.number(),
+  repaymentConsistency: z.number(),
+  debtToBalance: z.number(),
+});
+
 export const ScoresSchema = z.object({
   spending: z.number(),
   growth: z.number(),
@@ -12,6 +33,9 @@ export const ScoresSchema = z.object({
   spendingDelta: z.number(),
   growthDelta: z.number(),
   borrowingDelta: z.number(),
+  spendingBreakdown: SpendingBreakdownSchema.optional(),
+  growthBreakdown: GrowthBreakdownSchema.optional(),
+  borrowingBreakdown: BorrowingBreakdownSchema.optional(),
 });
 
 export const TrajectoryResultSchema = z.object({
@@ -55,6 +79,9 @@ export const SnapshotSchema = z.object({
   goal_id: z.string(),
   snapshot_date: z.string(),
   trajectory_age: z.number(),
+  spending_score: z.number().optional(),
+  growth_score: z.number().optional(),
+  borrowing_score: z.number().optional(),
 });
 
 export const GoalTrajectorySchema = z.object({
@@ -97,3 +124,6 @@ export type DashboardCollision = z.infer<typeof CollisionResultSchema>;
 export type ResolutionOption = z.infer<typeof ResolutionOptionSchema>;
 export type DashboardPromptCard = z.infer<typeof PromptCardSchema>;
 export type AccountSummary = z.infer<typeof AccountSummarySchema>;
+export type SpendingBreakdown = z.infer<typeof SpendingBreakdownSchema>;
+export type GrowthBreakdown = z.infer<typeof GrowthBreakdownSchema>;
+export type BorrowingBreakdown = z.infer<typeof BorrowingBreakdownSchema>;
