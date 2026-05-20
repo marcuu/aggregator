@@ -92,7 +92,7 @@ function Dashboard({ data }: { data: DashboardResponse }) {
         </Link>
       )}
 
-      <ScoreTrinity scores={data.scores} />
+      <ScoreTrinity scores={data.scores} snapshots={data.snapshots} />
 
       {data.accounts.length > 0 && (
         <AccountsSection accounts={data.accounts} />

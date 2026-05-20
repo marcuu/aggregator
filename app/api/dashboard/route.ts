@@ -127,7 +127,7 @@ export async function GET() {
   const [{ data: snapshots }, { data: dismissedRows }] = await Promise.all([
     supabase
       .from("trajectory_snapshots")
-      .select("goal_id, snapshot_date, trajectory_age")
+      .select("goal_id, snapshot_date, trajectory_age, spending_score, growth_score, borrowing_score")
       .eq("user_id", user.id)
       .order("snapshot_date", { ascending: true })
       .limit(SPARKLINE_WEEKS * Math.max(1, goalTrajectories.length)),
