@@ -94,5 +94,6 @@ export type DashboardAction = z.infer<typeof ActionSchema>;
 export type DashboardSnapshot = z.infer<typeof SnapshotSchema>;
 export type DashboardScores = z.infer<typeof ScoresSchema>;
 export type DashboardCollision = z.infer<typeof CollisionResultSchema>;
+export type ResolutionOption = z.infer<typeof ResolutionOptionSchema>;
 export type DashboardPromptCard = z.infer<typeof PromptCardSchema>;
 export type AccountSummary = z.infer<typeof AccountSummarySchema>;
