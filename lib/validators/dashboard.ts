@@ -44,6 +44,13 @@ export const CollisionResultSchema = z.object({
   resolutionOptions: z.array(ResolutionOptionSchema),
 });
 
+export const PromptCardSchema = z.object({
+  id: z.string(),
+  source: z.enum(["spending", "growth", "borrowing", "goal"]),
+  observation: z.string(),
+  seedMessage: z.string(),
+});
+
 export const SnapshotSchema = z.object({
   goal_id: z.string(),
   snapshot_date: z.string(),
@@ -66,6 +73,7 @@ export const DashboardResponseSchema = z.object({
   actionsTotal: z.number(),
   collision: CollisionResultSchema.nullable(),
   snapshots: z.array(SnapshotSchema),
+  promptCards: z.array(PromptCardSchema),
   institutionCount: z.number(),
   truelayerExpired: z.boolean(),
 });
@@ -76,3 +84,4 @@ export type DashboardAction = z.infer<typeof ActionSchema>;
 export type DashboardSnapshot = z.infer<typeof SnapshotSchema>;
 export type DashboardScores = z.infer<typeof ScoresSchema>;
 export type DashboardCollision = z.infer<typeof CollisionResultSchema>;
+export type DashboardPromptCard = z.infer<typeof PromptCardSchema>;

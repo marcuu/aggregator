@@ -54,6 +54,14 @@ const validResponse = {
       trajectory_age: 28.6,
     },
   ],
+  promptCards: [
+    {
+      id: "abc123",
+      source: "goal",
+      observation: "Test observation",
+      seedMessage: "Test seed",
+    },
+  ],
   institutionCount: 1,
   truelayerExpired: false,
 };
