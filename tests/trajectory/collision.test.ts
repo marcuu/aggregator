@@ -50,4 +50,26 @@ describe("detectCollision", () => {
     const b = { goal: makeGoal({ type: "wedding" }), trajectory: trajectory(20) };
     expect(detectCollision(a, b)).toEqual(detectCollision(b, a));
   });
+
+  it("clears a collision when one goal's rough_target_date pushes it past the window", () => {
+    const asOfDate = new Date("2026-05-20");
+    const a = { goal: makeGoal({ type: "home" }), trajectory: trajectory(12) };
+    const b = {
+      // Projected to finish in 18 months (collides with a at 12 months), but
+      // the user has parked it: rough_target_date is 4 years out.
+      goal: makeGoal({ type: "wedding", rough_target_date: "2030-05-20" }),
+      trajectory: trajectory(18),
+    };
+    expect(detectCollision(a, b, asOfDate).collides).toBe(false);
+  });
+
+  it("still collides when rough_target_date is earlier than projection", () => {
+    const asOfDate = new Date("2026-05-20");
+    const a = { goal: makeGoal({ type: "home" }), trajectory: trajectory(12) };
+    const b = {
+      goal: makeGoal({ type: "wedding", rough_target_date: "2026-11-20" }),
+      trajectory: trajectory(18),
+    };
+    expect(detectCollision(a, b, asOfDate).collides).toBe(true);
+  });
 });
