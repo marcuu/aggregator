@@ -10,6 +10,7 @@ import type { Scores } from "@/lib/trajectory/types";
 import { getTransactionsForUser } from "@/lib/truelayer/transactions";
 import { UserProfileSchema } from "@/lib/validators/profile";
 import { GoalSchema, type Goal } from "@/lib/validators/goals";
+import { generatePromptCards } from "@/lib/prompts/generator";
 
 /** Goal amounts are stored in pounds; the engine works in pence. */
 function toEnginePence(goal: Goal): Goal {
@@ -108,12 +109,27 @@ export async function GET() {
   const baseAge = goalTrajectories[0]?.trajectory.trajectoryAge ?? 0;
   const actions = rankActions(profile, goals, transactions, baseAge);
 
-  const { data: snapshots } = await supabase
-    .from("trajectory_snapshots")
-    .select("goal_id, snapshot_date, trajectory_age")
-    .eq("user_id", user.id)
-    .order("snapshot_date", { ascending: true })
-    .limit(SPARKLINE_WEEKS * Math.max(1, goalTrajectories.length));
+  const [{ data: snapshots }, { data: dismissedRows }] = await Promise.all([
+    supabase
+      .from("trajectory_snapshots")
+      .select("goal_id, snapshot_date, trajectory_age")
+      .eq("user_id", user.id)
+      .order("snapshot_date", { ascending: true })
+      .limit(SPARKLINE_WEEKS * Math.max(1, goalTrajectories.length)),
+    supabase
+      .from("dismissed_prompts")
+      .select("prompt_id")
+      .eq("user_id", user.id),
+  ]);
+
+  const dismissed = new Set((dismissedRows ?? []).map((d) => d.prompt_id));
+  const promptCards = generatePromptCards({
+    scores,
+    goals: goalTrajectories.map((g) => ({
+      type: g.goal.type,
+      trajectoryAge: g.trajectory.trajectoryAge,
+    })),
+  }).filter((card) => !dismissed.has(card.id));
 
   return NextResponse.json({
     profile: {
@@ -126,6 +142,7 @@ export async function GET() {
     actionsTotal: actions.length,
     collision,
     snapshots: snapshots ?? [],
+    promptCards,
     institutionCount: activeConnections ?? 0,
     truelayerExpired: (expiredConnections ?? 0) > 0,
   });

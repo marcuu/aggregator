@@ -12,6 +12,7 @@ import { CollisionStrip } from "./CollisionStrip";
 import { GoalCard } from "./GoalCard";
 import { ActionCard } from "./ActionCard";
 import { PromptCard } from "./PromptCard";
+import { PromptCardList } from "./PromptCardList";
 
 const SECTOR_LABEL: Record<string, string> = {
   banking: "Banking",
@@ -92,6 +93,8 @@ function Dashboard({ data }: { data: DashboardResponse }) {
       <ScoreTrinity scores={data.scores} />
 
       {data.collision && <CollisionStrip collision={data.collision} />}
+
+      <PromptCardList cards={data.promptCards} />
 
       {data.goals.length > 0 && (
         <section>

@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      dismissed_prompts: {
+        Row: {
+          dismissed_at: string
+          prompt_id: string
+          user_id: string
+        }
+        Insert: {
+          dismissed_at?: string
+          prompt_id: string
+          user_id: string
+        }
+        Update: {
+          dismissed_at?: string
+          prompt_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       goals: {
         Row: {
           created_at: string
