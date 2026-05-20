@@ -40,6 +40,8 @@ export async function GET() {
     { data: lastSnapshot },
     { count: activeConnections },
     { count: expiredConnections },
+    { data: accountRows },
+    { data: connectionRows },
   ] = await Promise.all([
     supabase.from("user_profiles").select("*").eq("user_id", user.id).maybeSingle(),
     supabase
@@ -65,6 +67,15 @@ export async function GET() {
       .from("ob_connections")
       .select("id", { count: "exact", head: true })
       .eq("status", "expired"),
+    supabase
+      .from("ob_accounts")
+      .select("id, display_name, account_type, currency, current_balance, connection_id")
+      .eq("user_id", user.id)
+      .order("display_name"),
+    supabase
+      .from("ob_connections")
+      .select("id, institution_name")
+      .eq("user_id", user.id),
   ]);
 
   if (!profileRow) {
@@ -131,6 +142,18 @@ export async function GET() {
     })),
   }).filter((card) => !dismissed.has(card.id));
 
+  const connectionById = new Map(
+    (connectionRows ?? []).map((c) => [c.id, c.institution_name]),
+  );
+  const accounts = (accountRows ?? []).map((a) => ({
+    id: a.id,
+    display_name: a.display_name,
+    account_type: a.account_type,
+    currency: a.currency,
+    current_balance: a.current_balance,
+    institution_name: connectionById.get(a.connection_id) ?? null,
+  }));
+
   return NextResponse.json({
     profile: {
       sector: profile.sector,
@@ -145,5 +168,6 @@ export async function GET() {
     promptCards,
     institutionCount: activeConnections ?? 0,
     truelayerExpired: (expiredConnections ?? 0) > 0,
+    accounts,
   });
 }
