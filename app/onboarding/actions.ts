@@ -4,8 +4,11 @@ import { redirect } from "next/navigation";
 
 import { createClient, getRequestUserId } from "@/lib/supabase/server";
 import { getTransactionsForUser } from "@/lib/truelayer/transactions";
+import { calculateTrajectoryAge } from "@/lib/trajectory/engine";
+import type { BenchmarkRow } from "@/lib/trajectory/benchmarks";
 import type { Transaction } from "@/lib/trajectory/types";
 import type { GoalType } from "@/lib/validators/goals";
+import { UserProfileSchema } from "@/lib/validators/profile";
 import type { TablesInsert } from "@/types/database";
 import {
   EmergencyFundDetailsSchema,
@@ -104,6 +107,56 @@ export async function submitStep4(formData: FormData) {
     });
   }
 
+  // Compute a realistic rough_target_date for each goal from the trajectory
+  // engine so the date reflects what the user can actually afford.
+  const asOfDate = new Date();
+  const [{ data: profileRow }, { data: benchmarkRows }, transactions] =
+    await Promise.all([
+      supabase
+        .from("user_profiles")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("salary_benchmarks")
+        .select("sector, tier, age, salary_p25, salary_p50, salary_p75"),
+      getTransactionsForUser(userId!, supabase),
+    ]);
+
+  if (profileRow) {
+    const profile = UserProfileSchema.parse(profileRow);
+    const benchmarks = (benchmarkRows ?? []) as BenchmarkRow[];
+
+    for (const goal of goals) {
+      // Engine expects pence; the DB (and insert) stores whole pounds.
+      const goalForEngine = {
+        id: "00000000-0000-0000-0000-000000000000",
+        user_id: userId,
+        type: goal.type,
+        target_amount: (goal.target_amount ?? 0) * 100,
+        saved_amount: 0,
+        deposit_pct: goal.deposit_pct ?? null,
+        target_region: goal.target_region ?? null,
+        rough_target_date: null,
+        is_active: true,
+      };
+
+      const { monthsToGoal } = calculateTrajectoryAge(
+        profile,
+        goalForEngine,
+        transactions,
+        benchmarks,
+        asOfDate,
+      );
+
+      if (monthsToGoal > 0) {
+        const targetDate = new Date(asOfDate);
+        targetDate.setMonth(targetDate.getMonth() + monthsToGoal);
+        goal.rough_target_date = targetDate.toISOString().slice(0, 10);
+      }
+    }
+  }
+
   // Replace any goals from a previous run so the unique / max-active
   // constraints cannot trip on a redo of onboarding.
   await supabase.from("goals").delete().eq("user_id", userId);
@@ -144,10 +197,12 @@ async function buildGoal(
         budget: formData.get("wedding__budget"),
         rough_year: formData.get("wedding__rough_year"),
       });
+      // rough_target_date is overwritten by the trajectory calculation in
+      // submitStep4; the user's rough_year is ignored in favour of the date
+      // they are actually on track to afford it.
       return {
         type: "wedding",
         target_amount: d.budget,
-        rough_target_date: `${d.rough_year}-06-01`,
       };
     }
     case "emergency_fund": {
