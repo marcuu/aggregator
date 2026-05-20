@@ -114,7 +114,7 @@ export async function submitStep4(formData: FormData) {
     .update({ onboarding_complete: true, onboarding_step: 5 })
     .eq("user_id", userId);
 
-  redirect("/onboarding/reveal");
+  redirect("/onboarding/ob");
 }
 
 type GoalFields = Omit<TablesInsert<"goals">, "user_id">;
