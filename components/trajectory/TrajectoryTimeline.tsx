@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   TrajectoryTimelineResponseSchema,
@@ -260,9 +260,6 @@ function IncomeTable({ points }: { points: TimelinePoint[] }) {
 
 export function TrajectoryTimeline() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [chartWidth, setChartWidth] = useState(0);
-  const [scrubIndex, setScrubIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -283,20 +280,6 @@ export function TrajectoryTimeline() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      if (w > 0) setChartWidth(w);
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  const handleScrub = useCallback((s: ScrubPoint | null) => {
-    setScrubIndex(s ? s.index : null);
   }, []);
 
   return (
@@ -322,32 +305,44 @@ export function TrajectoryTimeline() {
 
       {state.status === "loading" && <LoadingState />}
       {state.status === "error" && <ErrorState />}
-      {state.status === "ready" && (
-        <ReadyContent
-          data={state.data}
-          chartWidth={chartWidth}
-          containerRef={containerRef}
-          scrubIndex={scrubIndex}
-          onScrub={handleScrub}
-        />
-      )}
+      {state.status === "ready" && <ReadyContent data={state.data} />}
     </main>
   );
 }
 
-function ReadyContent({
-  data,
-  chartWidth,
-  containerRef,
-  scrubIndex,
-  onScrub,
-}: {
-  data: TrajectoryTimelineResponse;
-  chartWidth: number;
-  containerRef: RefObject<HTMLDivElement | null>;
-  scrubIndex: number | null;
-  onScrub: (s: ScrubPoint | null) => void;
-}) {
+function ReadyContent({ data }: { data: TrajectoryTimelineResponse }) {
+  // Ref + ResizeObserver live here so they initialise once the chart
+  // container is actually mounted (i.e. after the data has loaded).
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+  const [scrubIndex, setScrubIndex] = useState<number | null>(null);
+
+  // Callback ref: fires when the element mounts and when it unmounts.
+  // This is more reliable than a useEffect against a useRef, because
+  // the effect ordering can miss the initial attach.
+  const setContainer = useCallback((el: HTMLDivElement | null) => {
+    containerRef.current = el;
+    if (!el) return;
+    // Set an initial width synchronously so the chart can render on first paint.
+    const w = el.getBoundingClientRect().width;
+    if (w > 0) setChartWidth(w);
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) setChartWidth(w);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleScrub = useCallback((s: ScrubPoint | null) => {
+    setScrubIndex(s ? s.index : null);
+  }, []);
+
   // When not scrubbing, show the horizon point (last in the array).
   const displayIndex =
     scrubIndex !== null ? scrubIndex : data.points.length - 1;
@@ -372,7 +367,7 @@ function ReadyContent({
           <Legend hasDebt={data.hasDebt} />
         </div>
         <div
-          ref={containerRef}
+          ref={setContainer}
           className="mt-3 overflow-hidden rounded-xl px-4 pb-3 pt-4"
           style={{ background: "var(--surface-secondary)" }}
         >
@@ -382,7 +377,7 @@ function ReadyContent({
               milestones={data.milestones}
               hasDebt={data.hasDebt}
               width={chartWidth - 32}
-              onScrub={onScrub}
+              onScrub={handleScrub}
               scrubIndex={scrubIndex}
             />
           )}
