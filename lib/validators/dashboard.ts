@@ -62,6 +62,15 @@ export const GoalTrajectorySchema = z.object({
   trajectory: TrajectoryResultSchema,
 });
 
+export const AccountSummarySchema = z.object({
+  id: z.string(),
+  display_name: z.string().nullable(),
+  account_type: z.string().nullable(),
+  currency: z.string().nullable(),
+  current_balance: z.number().nullable(),
+  institution_name: z.string().nullable(),
+});
+
 export const DashboardResponseSchema = z.object({
   profile: z.object({
     sector: SectorSchema,
@@ -76,6 +85,7 @@ export const DashboardResponseSchema = z.object({
   promptCards: z.array(PromptCardSchema),
   institutionCount: z.number(),
   truelayerExpired: z.boolean(),
+  accounts: z.array(AccountSummarySchema),
 });
 
 export type DashboardResponse = z.infer<typeof DashboardResponseSchema>;
@@ -85,3 +95,4 @@ export type DashboardSnapshot = z.infer<typeof SnapshotSchema>;
 export type DashboardScores = z.infer<typeof ScoresSchema>;
 export type DashboardCollision = z.infer<typeof CollisionResultSchema>;
 export type DashboardPromptCard = z.infer<typeof PromptCardSchema>;
+export type AccountSummary = z.infer<typeof AccountSummarySchema>;

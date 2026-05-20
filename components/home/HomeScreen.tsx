@@ -6,7 +6,9 @@ import Link from "next/link";
 import {
   DashboardResponseSchema,
   type DashboardResponse,
+  type AccountSummary,
 } from "@/lib/validators/dashboard";
+import { formatCurrency } from "@/lib/utils";
 import { ScoreTrinity } from "./ScoreTrinity";
 import { CollisionStrip } from "./CollisionStrip";
 import { GoalCard } from "./GoalCard";
@@ -92,6 +94,10 @@ function Dashboard({ data }: { data: DashboardResponse }) {
 
       <ScoreTrinity scores={data.scores} />
 
+      {data.accounts.length > 0 && (
+        <AccountsSection accounts={data.accounts} />
+      )}
+
       {data.collision && <CollisionStrip collision={data.collision} />}
 
       <PromptCardList cards={data.promptCards} />
@@ -134,6 +140,54 @@ function Dashboard({ data }: { data: DashboardResponse }) {
 
       <PromptCard institutionCount={data.institutionCount} />
     </>
+  );
+}
+
+function AccountsSection({ accounts }: { accounts: AccountSummary[] }) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between">
+        <h2 className="section-label">Accounts</h2>
+        <Link
+          href="/dashboard/accounts"
+          className="text-[12px]"
+          style={{ color: "var(--text-tertiary)" }}
+        >
+          View all
+        </Link>
+      </div>
+      <div
+        className="mt-3 overflow-hidden rounded-xl"
+        style={{ background: "var(--surface-secondary)" }}
+      >
+        {accounts.map((account, i) => (
+          <div
+            key={account.id}
+            className="flex items-center justify-between px-4 py-3"
+            style={
+              i < accounts.length - 1
+                ? { borderBottom: "1px solid var(--border)" }
+                : undefined
+            }
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[14px] font-medium">
+                {account.display_name ?? account.account_type ?? "Account"}
+              </p>
+              <p
+                className="truncate text-[12px]"
+                style={{ color: "var(--text-tertiary)" }}
+              >
+                {account.institution_name ?? account.account_type ?? "—"}
+              </p>
+            </div>
+            <p className="ml-4 shrink-0 text-[15px] font-semibold tabular-nums">
+              {formatCurrency(account.current_balance, account.currency)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
