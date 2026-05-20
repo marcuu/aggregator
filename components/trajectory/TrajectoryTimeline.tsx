@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import {
   TrajectoryTimelineResponseSchema,
@@ -8,7 +8,7 @@ import {
   type TimelinePoint,
   type GoalMilestone,
 } from "@/lib/validators/trajectory";
-import { TimelineChart } from "./TimelineChart";
+import { TimelineChart, type ScrubPoint } from "./TimelineChart";
 
 type LoadState =
   | { status: "loading" }
@@ -21,58 +21,155 @@ const gbp = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 0,
 });
 
-function formatPence(p: number) {
-  return gbp.format(p / 100);
+function fmt(pence: number) {
+  return gbp.format(pence / 100);
 }
 
-function IncomeTable({ points }: { points: TimelinePoint[] }) {
-  // Show salary at every 5-year interval starting from year 0
-  const startYear = points[0]?.year ?? new Date().getFullYear();
-  const rows = points.filter((p) => (p.year - startYear) % 5 === 0);
+// ─── Scrub display card ────────────────────────────────────────────────────
 
+function ScrubCard({
+  point,
+  hasDebt,
+  isDefault,
+}: {
+  point: TimelinePoint;
+  hasDebt: boolean;
+  isDefault: boolean;
+}) {
   return (
     <div
-      className="overflow-hidden rounded-xl"
+      className="rounded-2xl p-4"
       style={{ background: "var(--surface-secondary)" }}
     >
-      {rows.map((p, i) => (
-        <div
-          key={p.year}
-          className="flex items-center justify-between px-4 py-3"
-          style={
-            i < rows.length - 1
-              ? { borderBottom: "1px solid var(--border-subtle)" }
-              : undefined
-          }
+      <div className="flex items-baseline justify-between">
+        <p className="text-[22px] font-semibold tabular-nums leading-none">
+          Age {Math.floor(point.age)}
+        </p>
+        <p
+          className="text-[13px] tabular-nums"
+          style={{ color: "var(--text-tertiary)" }}
         >
-          <div>
-            <p className="text-[13px] font-medium">
-              {p.year}
-            </p>
-            <p className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-              Age {Math.floor(p.age)}
-            </p>
-          </div>
-          <p
-            className="text-[14px] font-semibold tabular-nums"
-            style={{ color: "var(--score-growth)" }}
-          >
-            {formatPence(p.annualSalary)}
-            <span
-              className="ml-1 text-[11px] font-normal"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              /yr
-            </span>
-          </p>
-        </div>
-      ))}
+          {point.year}
+          {isDefault && (
+            <span className="ml-1.5 text-[11px]">← drag to explore</span>
+          )}
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-3">
+        <ScrubStat
+          label="Savings"
+          value={fmt(point.cumulativeSavings)}
+          color="var(--score-growth)"
+        />
+        <ScrubStat
+          label="Income"
+          value={fmt(point.annualSalary) + "/yr"}
+          color="var(--score-borrowing)"
+        />
+        {hasDebt ? (
+          <ScrubStat
+            label="Debt"
+            value={point.debtBalance > 100 ? fmt(point.debtBalance) : "Cleared"}
+            color={
+              point.debtBalance > 100
+                ? "var(--score-spending)"
+                : "var(--score-growth)"
+            }
+          />
+        ) : (
+          <ScrubStat
+            label="Surplus"
+            value=""
+            color="var(--text-tertiary)"
+            dim
+          />
+        )}
+      </div>
     </div>
   );
 }
 
-function MilestoneList({ data }: { data: TrajectoryTimelineResponse }) {
-  if (data.milestones.length === 0) return null;
+function ScrubStat({
+  label,
+  value,
+  color,
+  dim,
+}: {
+  label: string;
+  value: string;
+  color: string;
+  dim?: boolean;
+}) {
+  return (
+    <div>
+      <p className="section-label">{label}</p>
+      <p
+        className="mt-1 text-[14px] font-semibold tabular-nums leading-snug"
+        style={{ color: dim ? "var(--text-tertiary)" : color, opacity: dim ? 0.4 : 1 }}
+      >
+        {value || "—"}
+      </p>
+    </div>
+  );
+}
+
+// ─── Legend ────────────────────────────────────────────────────────────────
+
+function Legend({
+  hasDebt,
+}: {
+  hasDebt: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-4">
+      <LegendItem color="var(--score-growth)" label="Savings" solid />
+      <LegendItem color="var(--score-borrowing)" label="Income" />
+      {hasDebt && <LegendItem color="var(--score-spending)" label="Debt" solid />}
+    </div>
+  );
+}
+
+function LegendItem({
+  color,
+  label,
+  solid,
+}: {
+  color: string;
+  label: string;
+  solid?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {solid ? (
+        <span
+          className="inline-block h-2 w-4 rounded-full"
+          style={{ background: color, opacity: 0.7 }}
+        />
+      ) : (
+        <svg width={16} height={8} aria-hidden="true">
+          <line
+            x1={0}
+            y1={4}
+            x2={16}
+            y2={4}
+            stroke={color}
+            strokeWidth={1.5}
+            strokeDasharray="5 2"
+          />
+        </svg>
+      )}
+      <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ─── Milestones list ────────────────────────────────────────────────────────
+
+function MilestoneList({ milestones }: { milestones: GoalMilestone[] }) {
+  if (milestones.length === 0) return null;
   return (
     <section>
       <h2 className="section-label">Goal milestones</h2>
@@ -80,12 +177,12 @@ function MilestoneList({ data }: { data: TrajectoryTimelineResponse }) {
         className="mt-3 overflow-hidden rounded-xl"
         style={{ background: "var(--surface-secondary)" }}
       >
-        {data.milestones.map((m: GoalMilestone, i: number) => (
+        {milestones.map((m: GoalMilestone, i: number) => (
           <div
             key={m.goalId}
             className="flex items-center justify-between px-4 py-3"
             style={
-              i < data.milestones.length - 1
+              i < milestones.length - 1
                 ? { borderBottom: "1px solid var(--border-subtle)" }
                 : undefined
             }
@@ -103,7 +200,7 @@ function MilestoneList({ data }: { data: TrajectoryTimelineResponse }) {
               className="text-[13px] font-semibold tabular-nums"
               style={{ color: "var(--score-spending)" }}
             >
-              −{formatPence(m.amount)}
+              −{fmt(m.amount)}
             </p>
           </div>
         ))}
@@ -112,35 +209,60 @@ function MilestoneList({ data }: { data: TrajectoryTimelineResponse }) {
   );
 }
 
-function StatChip({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: string;
-}) {
+// ─── Income projection table ────────────────────────────────────────────────
+
+function IncomeTable({ points }: { points: TimelinePoint[] }) {
+  const startYear = points[0]?.year ?? new Date().getFullYear();
+  const rows = points.filter((p) => (p.year - startYear) % 5 === 0);
   return (
     <div
-      className="flex flex-1 flex-col gap-1 rounded-xl px-4 py-3"
+      className="overflow-hidden rounded-xl"
       style={{ background: "var(--surface-secondary)" }}
     >
-      <p className="section-label">{label}</p>
-      <p
-        className="text-[18px] font-semibold tabular-nums leading-none"
-        style={{ color: accent ?? "var(--text-primary)" }}
-      >
-        {value}
-      </p>
+      {rows.map((p, i) => (
+        <div
+          key={p.year}
+          className="flex items-center justify-between px-4 py-3"
+          style={
+            i < rows.length - 1
+              ? { borderBottom: "1px solid var(--border-subtle)" }
+              : undefined
+          }
+        >
+          <div>
+            <p className="text-[13px] font-medium">{p.year}</p>
+            <p
+              className="text-[11px]"
+              style={{ color: "var(--text-tertiary)" }}
+            >
+              Age {Math.floor(p.age)}
+            </p>
+          </div>
+          <p
+            className="text-[14px] font-semibold tabular-nums"
+            style={{ color: "var(--score-borrowing)" }}
+          >
+            {fmt(p.annualSalary)}
+            <span
+              className="ml-1 text-[11px] font-normal"
+              style={{ color: "var(--text-tertiary)" }}
+            >
+              /yr
+            </span>
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
+
+// ─── Main screen ────────────────────────────────────────────────────────────
 
 export function TrajectoryTimeline() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const containerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(0);
+  const [scrubIndex, setScrubIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,7 +280,9 @@ export function TrajectoryTimeline() {
       .catch(() => {
         if (!cancelled) setState({ status: "error" });
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -171,12 +295,19 @@ export function TrajectoryTimeline() {
     return () => observer.disconnect();
   }, []);
 
+  const handleScrub = useCallback((s: ScrubPoint | null) => {
+    setScrubIndex(s ? s.index : null);
+  }, []);
+
   return (
     <main className="mx-auto flex w-full max-w-[440px] flex-1 flex-col gap-5 px-5 pb-12 pt-7">
       <header className="flex items-center justify-between">
         <div>
           <p className="text-[22px] font-medium">Timeline</p>
-          <p className="mt-0.5 text-[13px]" style={{ color: "var(--text-secondary)" }}>
+          <p
+            className="mt-0.5 text-[13px]"
+            style={{ color: "var(--text-secondary)" }}
+          >
             Your financial projection
           </p>
         </div>
@@ -192,56 +323,57 @@ export function TrajectoryTimeline() {
       {state.status === "loading" && <LoadingState />}
       {state.status === "error" && <ErrorState />}
       {state.status === "ready" && (
-        <TimelineContent data={state.data} chartWidth={chartWidth} containerRef={containerRef} />
+        <ReadyContent
+          data={state.data}
+          chartWidth={chartWidth}
+          containerRef={containerRef}
+          scrubIndex={scrubIndex}
+          onScrub={handleScrub}
+        />
       )}
     </main>
   );
 }
 
-function TimelineContent({
+function ReadyContent({
   data,
   chartWidth,
   containerRef,
+  scrubIndex,
+  onScrub,
 }: {
   data: TrajectoryTimelineResponse;
   chartWidth: number;
   containerRef: RefObject<HTMLDivElement | null>;
+  scrubIndex: number | null;
+  onScrub: (s: ScrubPoint | null) => void;
 }) {
-  const lastPoint = data.points[data.points.length - 1];
-  const firstPoint = data.points[0];
+  // When not scrubbing, show the horizon point (last in the array).
+  const displayIndex =
+    scrubIndex !== null ? scrubIndex : data.points.length - 1;
+  const displayPoint = data.points[displayIndex];
+  const isDefault = scrubIndex === null;
 
   return (
     <>
-      {/* Quick stats */}
-      <div className="flex gap-3">
-        <StatChip
-          label="Monthly surplus"
-          value={`${formatPence(data.monthlySurplus)}`}
-          accent="var(--score-growth)"
+      {/* Scrub card — updates as user drags */}
+      {displayPoint && (
+        <ScrubCard
+          point={displayPoint}
+          hasDebt={data.hasDebt}
+          isDefault={isDefault}
         />
-        {data.hasDebt && (
-          <StatChip
-            label="Est. debt"
-            value={formatPence(data.initialDebtBalance)}
-            accent="var(--score-spending)"
-          />
-        )}
-      </div>
+      )}
 
-      {/* Main chart */}
+      {/* Chart */}
       <section>
         <div className="flex items-baseline justify-between">
-          <h2 className="section-label">Savings trajectory</h2>
-          <div className="flex items-center gap-3">
-            <Legend color="var(--score-growth)" label="Savings" />
-            {data.hasDebt && (
-              <Legend color="var(--score-spending)" label="Debt" />
-            )}
-          </div>
+          <h2 className="section-label">Trajectory</h2>
+          <Legend hasDebt={data.hasDebt} />
         </div>
         <div
           ref={containerRef}
-          className="mt-3 overflow-hidden rounded-xl p-4"
+          className="mt-3 overflow-hidden rounded-xl px-4 pb-3 pt-4"
           style={{ background: "var(--surface-secondary)" }}
         >
           {chartWidth > 0 && (
@@ -249,24 +381,15 @@ function TimelineContent({
               points={data.points}
               milestones={data.milestones}
               hasDebt={data.hasDebt}
-              width={chartWidth - 32} /* subtract padding */
+              width={chartWidth - 32}
+              onScrub={onScrub}
+              scrubIndex={scrubIndex}
             />
           )}
         </div>
-        {lastPoint && (
-          <p
-            className="mt-2 text-right text-[11px] tabular-nums"
-            style={{ color: "var(--text-tertiary)" }}
-          >
-            Projected savings by {lastPoint.year}:{" "}
-            <span style={{ color: "var(--score-growth)" }}>
-              {formatPence(lastPoint.cumulativeSavings)}
-            </span>
-          </p>
-        )}
       </section>
 
-      <MilestoneList data={data} />
+      <MilestoneList milestones={data.milestones} />
 
       {/* Income growth */}
       <section>
@@ -277,35 +400,16 @@ function TimelineContent({
         >
           Projected salary based on your sector and trajectory tier.
         </p>
-        {firstPoint && (
-          <IncomeTable points={data.points} />
-        )}
+        <IncomeTable points={data.points} />
       </section>
     </>
-  );
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span
-        className="inline-block h-2 w-5 rounded-full"
-        style={{ background: color, opacity: 0.8 }}
-      />
-      <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-        {label}
-      </span>
-    </div>
   );
 }
 
 function LoadingState() {
   return (
     <div className="flex flex-col gap-4" aria-hidden="true">
-      <div className="flex gap-3">
-        <div className="h-16 flex-1 animate-pulse rounded-xl bg-[var(--surface-secondary)]" />
-        <div className="h-16 flex-1 animate-pulse rounded-xl bg-[var(--surface-secondary)]" />
-      </div>
+      <div className="h-28 animate-pulse rounded-2xl bg-[var(--surface-secondary)]" />
       <div className="h-64 animate-pulse rounded-xl bg-[var(--surface-secondary)]" />
       <div className="h-32 animate-pulse rounded-xl bg-[var(--surface-secondary)]" />
       <div className="h-40 animate-pulse rounded-xl bg-[var(--surface-secondary)]" />
@@ -317,7 +421,10 @@ function ErrorState() {
   return (
     <div className="mt-10 text-center">
       <p className="text-[15px] font-medium">Timeline unavailable</p>
-      <p className="mt-1 text-[13px]" style={{ color: "var(--text-secondary)" }}>
+      <p
+        className="mt-1 text-[13px]"
+        style={{ color: "var(--text-secondary)" }}
+      >
         We couldn&apos;t compute your projection. Refresh to try again.
       </p>
     </div>

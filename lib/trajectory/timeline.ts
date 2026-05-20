@@ -200,7 +200,9 @@ export function buildTrajectoryTimeline(
       month,
       year,
       age: ageNow,
-      annualSalary: salary * 12,
+      // current_salary is annual pounds; multiply by 100 to store as pence
+      // so all monetary fields in this struct share the same unit.
+      annualSalary: salary * 100,
       cumulativeSavings: Math.max(0, savings),
       debtBalance: Math.max(0, debt),
     });
