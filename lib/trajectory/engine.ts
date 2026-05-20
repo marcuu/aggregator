@@ -78,7 +78,7 @@ export function calculateTrajectoryAge(
     monthlySurplus,
     savedAmount,
     monthsToGoal: monthsElapsed,
-    cohortPercentile: null,
+    cohortPercentile,
   };
 }
 

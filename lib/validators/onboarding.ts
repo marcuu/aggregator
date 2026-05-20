@@ -8,6 +8,10 @@ import { GoalTypeSchema } from "./goals";
  * strings, so numeric fields use z.coerce.
  */
 
+export const Step0Schema = z.object({
+  date_of_birth: z.string().date(),
+});
+
 export const Step1Schema = z.object({
   current_salary: z.coerce.number().int().positive().max(999999),
   sector: SectorSchema,
@@ -61,6 +65,7 @@ export const InvestStartDetailsSchema = z.object({
   monthly_contribution: z.coerce.number().int().positive().max(999_999),
 });
 
+export type Step0Input = z.infer<typeof Step0Schema>;
 export type Step1Input = z.infer<typeof Step1Schema>;
 export type Step2Input = z.infer<typeof Step2Schema>;
 export type Step3Input = z.infer<typeof Step3Schema>;
