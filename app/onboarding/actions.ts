@@ -129,8 +129,9 @@ export async function submitStep4(formData: FormData) {
     });
   }
 
-  // Compute a realistic rough_target_date for each goal from the trajectory
-  // engine so the date reflects what the user can actually afford.
+  // Compute a realistic projected_target_date for each goal from the
+  // trajectory engine. The user's own rough_target_date (intent) is left
+  // untouched — the two are separate fields now.
   const asOfDate = new Date();
   const [{ data: profileRow }, { data: benchmarkRows }, transactions] =
     await Promise.all([
@@ -159,7 +160,8 @@ export async function submitStep4(formData: FormData) {
         saved_amount: 0,
         deposit_pct: goal.deposit_pct ?? null,
         target_region: goal.target_region ?? null,
-        rough_target_date: null,
+        rough_target_date: goal.rough_target_date ?? null,
+        projected_target_date: null,
         is_active: true,
       };
 
@@ -174,7 +176,7 @@ export async function submitStep4(formData: FormData) {
       if (monthsToGoal > 0) {
         const targetDate = new Date(asOfDate);
         targetDate.setMonth(targetDate.getMonth() + monthsToGoal);
-        goal.rough_target_date = targetDate.toISOString().slice(0, 10);
+        goal.projected_target_date = targetDate.toISOString().slice(0, 10);
       }
     }
   }
@@ -219,12 +221,12 @@ async function buildGoal(
         budget: formData.get("wedding__budget"),
         rough_year: formData.get("wedding__rough_year"),
       });
-      // rough_target_date is overwritten by the trajectory calculation in
-      // submitStep4; the user's rough_year is ignored in favour of the date
-      // they are actually on track to afford it.
+      // Preserve the user's stated year as their intent (rough_target_date).
+      // The engine writes its own estimate to projected_target_date.
       return {
         type: "wedding",
         target_amount: d.budget,
+        rough_target_date: `${d.rough_year}-06-30`,
       };
     }
     case "emergency_fund": {

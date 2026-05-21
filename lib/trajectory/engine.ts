@@ -1,23 +1,26 @@
 import type { UserProfile } from "@/lib/validators/profile";
 import type { Goal } from "@/lib/validators/goals";
 import type { Transaction, TrajectoryResult } from "./types";
-import { calculateCohortPercentile, projectSalary, type BenchmarkRow } from "./benchmarks";
+import { calculateCohortPercentile, type BenchmarkRow } from "./benchmarks";
 import { calculateMonthlySurplus } from "./surplus";
+import {
+  ageAtDate,
+  computeTargetAmountPounds,
+  monthsUntil,
+  project,
+} from "./projection";
 
-/** Conservative blended cash ISA / LISA rate. */
-const SAVINGS_INTEREST_RATE = 0.045;
-
-/** Sanity cap so a zero-surplus user does not loop forever. */
-const MAX_MONTHS = 30 * 12;
-
-const MS_PER_YEAR = 1000 * 60 * 60 * 24 * 365.25;
+export { ageAtDate } from "./projection";
 
 /**
- * Project the age at which a goal is met.
+ * Project the age at which a single goal is met.
  *
- * Pure: every date is passed in, no clock is read. Monetary inputs
- * (goal.target_amount, goal.saved_amount) and the computed surplus are all
- * integer pence so the running balance never drifts.
+ * Thin wrapper over the shared projection kernel (`project`) so the
+ * dashboard, reveal screen and onboarding all run identical maths. The goal
+ * is passed with monetary fields already in pence — `target_amount` and
+ * `saved_amount` here are pence, not the pounds stored in the DB. Callers
+ * should pass the *derived* saved amount from the FinancialStateService
+ * rather than the stale `goal.saved_amount` column.
  */
 export function calculateTrajectoryAge(
   profile: UserProfile,
@@ -27,8 +30,6 @@ export function calculateTrajectoryAge(
   asOfDate: Date,
 ): TrajectoryResult {
   const monthlySurplus = calculateMonthlySurplus(transactions, asOfDate);
-  const savedAmount = goal.saved_amount;
-  const targetAmount = computeTargetAmount(goal);
   const currentAge = ageAtDate(profile.date_of_birth, asOfDate);
   const cohortPercentile = calculateCohortPercentile(
     profile.current_salary,
@@ -36,83 +37,42 @@ export function calculateTrajectoryAge(
     benchmarks,
   );
 
-  if (targetAmount - savedAmount <= 0) {
-    const months = monthsUntilRough(goal.rough_target_date, asOfDate);
-    return {
-      trajectoryAge: roundTo(currentAge + months / 12, 1),
-      monthlySurplus,
-      savedAmount,
-      monthsToGoal: months,
-      cohortPercentile,
-    };
-  }
+  // goal here is already in pence (callers convert), so use its fields
+  // directly rather than the pounds-based helper.
+  const targetPence =
+    goal.type === "home" && goal.deposit_pct !== null
+      ? Math.round(goal.target_amount * (goal.deposit_pct / 100))
+      : goal.target_amount;
 
-  let runningSaved = savedAmount;
-  let monthsElapsed = 0;
-  let currentSalary = profile.current_salary;
+  const result = project({
+    profile,
+    goals: [
+      {
+        goal,
+        targetPence,
+        savedPence: goal.saved_amount,
+        earliestMonth: monthsUntil(goal.rough_target_date, asOfDate),
+      },
+    ],
+    benchmarks,
+    monthlySurplusPence: monthlySurplus,
+    asOfDate,
+    allocation: "sequential",
+  });
 
-  while (runningSaved < targetAmount && monthsElapsed < MAX_MONTHS) {
-    monthsElapsed += 1;
-    const ageNow = currentAge + monthsElapsed / 12;
-
-    // Re-project salary once a year; surplus scales with salary growth.
-    if (monthsElapsed % 12 === 0) {
-      currentSalary = projectSalary(
-        currentAge,
-        profile.current_salary,
-        ageNow,
-        profile.sector,
-        profile.trajectory_tier,
-        benchmarks,
-      );
-    }
-
-    const surplusThisMonth =
-      monthlySurplus * (currentSalary / profile.current_salary);
-
-    runningSaved =
-      runningSaved * (1 + SAVINGS_INTEREST_RATE / 12) + surplusThisMonth;
-  }
-
-  // Honour the user's rough_target_date as a "do not start earlier than" intent.
-  // If they parked the goal further out, that's when it actually completes.
-  const effectiveMonths = Math.max(
-    monthsElapsed,
-    monthsUntilRough(goal.rough_target_date, asOfDate),
-  );
+  const months = result.perGoal[0].monthsToGoal;
 
   return {
-    trajectoryAge: roundTo(currentAge + effectiveMonths / 12, 1),
+    trajectoryAge: roundTo(currentAge + months / 12, 1),
     monthlySurplus,
-    savedAmount,
-    monthsToGoal: effectiveMonths,
+    savedAmount: goal.saved_amount,
+    monthsToGoal: months,
     cohortPercentile,
   };
 }
 
-function monthsUntilRough(rough: string | null, asOfDate: Date): number {
-  if (!rough) return 0;
-  const target = new Date(rough);
-  const months =
-    (target.getFullYear() - asOfDate.getFullYear()) * 12 +
-    (target.getMonth() - asOfDate.getMonth());
-  return Math.max(0, months);
-}
-
-/** Age in fractional years at the given date. Falls back to 22 with no DOB. */
-export function ageAtDate(dob: string | null, asOfDate: Date): number {
-  if (!dob) return 22;
-  const birth = new Date(dob);
-  return (asOfDate.getTime() - birth.getTime()) / MS_PER_YEAR;
-}
-
-/** For a home goal the target is the deposit; other goals target the full sum. */
-function computeTargetAmount(goal: Goal): number {
-  if (goal.type === "home" && goal.deposit_pct !== null) {
-    return Math.round(goal.target_amount * (goal.deposit_pct / 100));
-  }
-  return goal.target_amount;
-}
+/** Re-exported for callers that historically imported it from the engine. */
+export { computeTargetAmountPounds };
 
 function roundTo(n: number, dp: number): number {
   const factor = 10 ** dp;

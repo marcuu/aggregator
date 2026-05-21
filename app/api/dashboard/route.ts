@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
-import { calculateTrajectoryAge } from "@/lib/trajectory/engine";
 import { calculateScores } from "@/lib/trajectory/scores";
 import { rankActions } from "@/lib/trajectory/actions";
 import { detectCollision } from "@/lib/trajectory/collision";
@@ -9,17 +8,10 @@ import type { BenchmarkRow } from "@/lib/trajectory/benchmarks";
 import type { Scores } from "@/lib/trajectory/types";
 import { getTransactionsForUser } from "@/lib/truelayer/transactions";
 import { UserProfileSchema } from "@/lib/validators/profile";
-import { GoalSchema, type Goal } from "@/lib/validators/goals";
+import { GoalSchema } from "@/lib/validators/goals";
 import { generatePromptCards } from "@/lib/prompts/generator";
-
-/** Goal amounts are stored in pounds; the engine works in pence. */
-function toEnginePence(goal: Goal): Goal {
-  return {
-    ...goal,
-    target_amount: goal.target_amount * 100,
-    saved_amount: goal.saved_amount * 100,
-  };
-}
+import { getFinancialState, attributeSavingsToGoals } from "@/lib/finance/state";
+import { projectUserGoals, projectUserGoalsSolo } from "@/lib/usecases/trajectory";
 
 /** Recent snapshots kept per goal for the home-screen sparkline. */
 const SPARKLINE_WEEKS = 12;
@@ -88,20 +80,21 @@ export async function GET() {
   const transactions = await getTransactionsForUser(user.id, supabase);
   const asOfDate = new Date();
 
-  // ob_accounts stores balances in pounds; engine works in pence.
-  const currentBalancePence = (accountRows ?? [])
-    .reduce((sum, a) => sum + Math.round((a.current_balance ?? 0) * 100), 0);
+  // Single source of truth for "what is true now": balances → surplus →
+  // saved-toward-goal attribution. Closes the goal-progress loop that used
+  // to read a hardcoded saved_amount of 0.
+  const financialState = await getFinancialState(user.id, supabase, asOfDate);
+  const currentBalancePence = financialState.liquidBalance as number;
+  const savedByGoal = attributeSavingsToGoals(goals, financialState);
 
-  const goalTrajectories = goals.map((goal) => ({
-    goal,
-    trajectory: calculateTrajectoryAge(
-      profile,
-      toEnginePence(goal),
-      transactions,
-      benchmarks,
-      asOfDate,
-    ),
-  }));
+  const goalTrajectories = projectUserGoals({
+    profile,
+    goals,
+    transactions,
+    benchmarks,
+    savedByGoal,
+    asOfDate,
+  });
 
   const previousScores: Scores | null = lastSnapshot
     ? {
@@ -116,9 +109,22 @@ export async function GET() {
 
   const scores = calculateScores(profile, transactions, previousScores, currentBalancePence);
 
-  const collision =
+  // Collision is judged on solo windows (would the goals compete for the
+  // surplus?), then the displayed numbers come from the allocated run.
+  const soloTrajectories =
     goalTrajectories.length === 2
-      ? detectCollision(goalTrajectories[0], goalTrajectories[1])
+      ? projectUserGoalsSolo({
+          profile,
+          goals,
+          transactions,
+          benchmarks,
+          savedByGoal,
+          asOfDate,
+        })
+      : [];
+  const collision =
+    soloTrajectories.length === 2
+      ? detectCollision(soloTrajectories[0], soloTrajectories[1])
       : null;
 
   const baseAge = goalTrajectories[0]?.trajectory.trajectoryAge ?? 0;

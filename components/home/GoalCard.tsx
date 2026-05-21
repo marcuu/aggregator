@@ -33,9 +33,16 @@ export function GoalCard({
   const drifting =
     history.length >= 2 && history[history.length - 1] > history[0] + 0.05;
 
+  // Saved is derived per-request from synced balances (pence); the effective
+  // target is the deposit for a home goal, the full sum otherwise.
+  const savedPounds = Math.round(trajectory.savedAmount / 100);
+  const targetPounds =
+    goal.type === "home" && goal.deposit_pct !== null
+      ? Math.round(goal.target_amount * (goal.deposit_pct / 100))
+      : goal.target_amount;
   const progress =
-    goal.target_amount > 0
-      ? Math.min(100, Math.round((goal.saved_amount / goal.target_amount) * 100))
+    targetPounds > 0
+      ? Math.min(100, Math.round((savedPounds / targetPounds) * 100))
       : 0;
 
   return (
@@ -81,7 +88,7 @@ export function GoalCard({
           className="mt-1.5 text-[12px] tabular-nums"
           style={{ color: "var(--text-tertiary)" }}
         >
-          {gbp.format(goal.saved_amount)} of {gbp.format(goal.target_amount)}
+          {gbp.format(savedPounds)} of {gbp.format(targetPounds)}
           {goal.target_region ? ` · ${goal.target_region}` : ""}
         </p>
       </div>

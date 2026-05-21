@@ -5,6 +5,7 @@ import type { TablesInsert } from "@/types/database";
 import { TokenRefreshError, refreshToken } from "./auth";
 import { getAccounts, getBalance, getTransactions } from "./client";
 import type { Transaction } from "@/lib/validators/truelayer";
+import { normaliseTransactionCategory } from "./acl";
 
 type Client = SupabaseClient<Database>;
 
@@ -22,7 +23,7 @@ function mapTransaction(
     currency: tx.currency ?? null,
     description: tx.description ?? null,
     merchant_name: tx.merchant_name ?? null,
-    category: tx.transaction_category ?? null,
+    category: normaliseTransactionCategory(tx),
     transaction_type: tx.transaction_type ?? null,
     timestamp: tx.timestamp,
   };

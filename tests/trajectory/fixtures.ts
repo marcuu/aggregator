@@ -25,6 +25,7 @@ export function makeGoal(overrides: Partial<Goal> = {}): Goal {
     target_region: "Manchester",
     deposit_pct: null,
     rough_target_date: null,
+    projected_target_date: null,
     saved_amount: 0,
     is_active: true,
     ...overrides,

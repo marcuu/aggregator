@@ -38,6 +38,7 @@ export type Database = {
           deposit_pct: number | null
           id: string
           is_active: boolean
+          projected_target_date: string | null
           rough_target_date: string | null
           saved_amount: number
           target_amount: number
@@ -51,6 +52,7 @@ export type Database = {
           deposit_pct?: number | null
           id?: string
           is_active?: boolean
+          projected_target_date?: string | null
           rough_target_date?: string | null
           saved_amount?: number
           target_amount: number
@@ -64,6 +66,7 @@ export type Database = {
           deposit_pct?: number | null
           id?: string
           is_active?: boolean
+          projected_target_date?: string | null
           rough_target_date?: string | null
           saved_amount?: number
           target_amount?: number
