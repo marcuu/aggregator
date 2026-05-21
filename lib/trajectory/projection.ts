@@ -39,7 +39,7 @@ const MS_PER_YEAR = 1000 * 60 * 60 * 24 * 365.25;
  * because it's the largest and most time-sensitive; emergency fund
  * second to give downside protection; then wedding; then investing.
  */
-const SEQUENTIAL_PRIORITY: Record<GoalType, number> = {
+export const SEQUENTIAL_PRIORITY: Record<GoalType, number> = {
   home: 0,
   emergency_fund: 1,
   wedding: 2,

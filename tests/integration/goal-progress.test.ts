@@ -8,11 +8,13 @@ import type { Transaction } from "@/lib/trajectory/types";
 import { lawFastBenchmarks, makeGoal, makeProfile } from "../trajectory/fixtures";
 
 /**
- * Seam test for the goal-progress loop. The per-function unit tests are all
- * green even when the assembled system is dead, because the bug lived in the
- * wiring: saved_amount was hardcoded 0, surplus was double-counted across
- * goals, and the dashboard / collision detector read inconsistent numbers.
- * This test asserts the assembled use-case behaves:
+ * Use-case-level test for the goal-progress loop. Exercises the finance +
+ * use-case layers together (attribution → allocated projection → collision)
+ * but stops short of the route handler — the route-level regression guard
+ * lives in dashboard-route.test.ts, which drives GET /api/dashboard through a
+ * faked Supabase client and would catch a route that skips the service.
+ *
+ * Here we assert the assembled use-case behaves:
  *   (a) saved-toward-goal reflects synced balances, not 0;
  *   (b) two competing goals collide and finish later combined than alone;
  *   (c) projected age moves when balances move.
@@ -36,7 +38,7 @@ function stateWithSavings(savingsPence: number): FinancialState {
   };
 }
 
-describe("goal-progress loop (integration)", () => {
+describe("goal-progress loop (use-case)", () => {
   const profile = makeProfile();
   const transactions = monthlyTransactions(300_000, 255_000); // £450/mo surplus
   const homeGoal = makeGoal({ id: "home-1", type: "home", target_amount: 22_000 });

@@ -24,6 +24,7 @@ import {
 } from "@/lib/money";
 import { getTransactionsForUser } from "@/lib/truelayer/transactions";
 import { calculateMonthlySurplus } from "@/lib/trajectory/surplus";
+import { SEQUENTIAL_PRIORITY } from "@/lib/trajectory/projection";
 
 type Client = SupabaseClient<Database>;
 
@@ -72,13 +73,20 @@ export async function getFinancialState(
 /**
  * Attribute liquid savings to each active goal.
  *
- * v1 policy: take the savings-account balance and split it across goals in
- * proportion to remaining need. If there are no savings-type accounts
- * (common for fresh connections), fall back to a small slice of the wider
- * liquid balance so the progress bar moves with real money instead of
- * sitting at zero. Total attribution never exceeds savingsBalance +
- * liquid fallback, never exceeds any goal's target, and the result is
- * pre-computed once per request — every consumer reads the same number.
+ * v1 policy (deliberate — this is the attribution-model product decision):
+ * a *priority-fill* of the savings-account balance (or the wider liquid
+ * balance when there are no savings-type accounts — common for fresh
+ * connections). The pool fills each goal up to its effective target in the
+ * same priority order future surplus is allocated (see SEQUENTIAL_PRIORITY:
+ * home → emergency fund → wedding → investing), then spills the remainder to
+ * the next goal. So a £5k pot against a £4k home deposit and a £10k wedding
+ * fully funds the deposit and puts £1k toward the wedding — consistent with
+ * how the projection kernel sequences the same goals.
+ *
+ * This does NOT consult `goal.saved_amount`; progress is derived from live
+ * balances each request, never the stale column. There is no independent
+ * per-goal saved baseline (the pool is shared), so attribution is by
+ * priority, not by per-goal progress — a deliberate, documented limitation.
  *
  * Returns a Map of goal.id → saved pence (plain number; the engine and
  * use-case layer consume pence as numbers).
@@ -91,28 +99,20 @@ export function attributeSavingsToGoals(
   if (goals.length === 0) return out;
 
   // Use savings-type balance when available, else fall back to liquid.
-  const poolPence = (state.savingsBalance as number) > 0
+  let pool = ((state.savingsBalance as number) > 0
     ? state.savingsBalance
-    : state.liquidBalance;
-  const pool = poolPence as number;
+    : state.liquidBalance) as number;
 
-  // Remaining target per goal, in pence. target_amount is whole pounds.
-  const remaining = goals.map((g) => {
-    const target = poundsToPence(pounds(computeTargetAmount(g))) as number;
-    return Math.max(0, target);
-  });
-  const totalRemaining = remaining.reduce((s, v) => s + v, 0);
+  // Fill in the same priority order the projection allocates surplus.
+  const ordered = [...goals].sort(
+    (a, b) => SEQUENTIAL_PRIORITY[a.type] - SEQUENTIAL_PRIORITY[b.type],
+  );
 
-  if (totalRemaining <= 0 || pool <= 0) {
-    for (const g of goals) out.set(g.id, 0);
-    return out;
-  }
-
-  // Proportional split. Cap at each goal's remaining so we don't over-fund.
-  for (let i = 0; i < goals.length; i++) {
-    const share = Math.round((remaining[i] / totalRemaining) * pool);
-    const capped = Math.min(share, remaining[i]);
-    out.set(goals[i].id, Math.round(capped));
+  for (const goal of ordered) {
+    const target = Math.max(0, poundsToPence(pounds(computeTargetAmount(goal))) as number);
+    const give = Math.max(0, Math.min(target, pool));
+    out.set(goal.id, give);
+    pool -= give;
   }
   return out;
 }
