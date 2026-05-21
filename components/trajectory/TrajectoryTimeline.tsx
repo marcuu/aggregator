@@ -31,10 +31,12 @@ function ScrubCard({
   point,
   hasDebt,
   isDefault,
+  monthlySurplus,
 }: {
   point: TimelinePoint;
   hasDebt: boolean;
   isDefault: boolean;
+  monthlySurplus: number;
 }) {
   return (
     <div
@@ -80,9 +82,15 @@ function ScrubCard({
         ) : (
           <ScrubStat
             label="Surplus"
-            value=""
-            color="var(--text-tertiary)"
-            dim
+            value={monthlySurplus !== 0 ? fmt(monthlySurplus) + "/mo" : "—"}
+            color={
+              monthlySurplus > 0
+                ? "var(--score-growth)"
+                : monthlySurplus < 0
+                  ? "var(--score-spending)"
+                  : "var(--text-tertiary)"
+            }
+            dim={monthlySurplus === 0}
           />
         )}
       </div>
@@ -357,6 +365,7 @@ function ReadyContent({ data }: { data: TrajectoryTimelineResponse }) {
           point={displayPoint}
           hasDebt={data.hasDebt}
           isDefault={isDefault}
+          monthlySurplus={data.monthlySurplus}
         />
       )}
 
