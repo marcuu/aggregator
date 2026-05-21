@@ -19,7 +19,10 @@ export const GoalSchema = z.object({
   target_amount: z.number().int().positive(),
   target_region: z.string().nullable(),
   deposit_pct: z.number().int().min(5).max(50).nullable(),
+  /** User-stated target date (intent). Never overwritten by the engine. */
   rough_target_date: z.string().date().nullable(),
+  /** Engine-projected completion date. Recomputed by the snapshot cron. */
+  projected_target_date: z.string().date().nullable().default(null),
   saved_amount: z.number().int().nonnegative(),
   is_active: z.boolean(),
 });

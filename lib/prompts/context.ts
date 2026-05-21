@@ -6,6 +6,7 @@ import { ageAtDate, calculateTrajectoryAge } from "@/lib/trajectory/engine";
 import { calculateScores } from "@/lib/trajectory/scores";
 import { calculateMonthlySurplus } from "@/lib/trajectory/surplus";
 import { getTransactionsForUser } from "@/lib/truelayer/transactions";
+import { getFinancialState, attributeSavingsToGoals } from "@/lib/finance/state";
 import { GoalSchema, type GoalType } from "@/lib/validators/goals";
 import {
   SectorSchema,
@@ -91,13 +92,23 @@ export async function buildUserContext(
   const transactions = await getTransactionsForUser(user.id, supabase);
   const asOfDate = new Date();
 
+  // Derive current saved-toward-goal from synced balances so the model is
+  // told the user's real progress, not a hardcoded zero.
+  const financialState = await getFinancialState(user.id, supabase, asOfDate);
+  const savedByGoal = attributeSavingsToGoals(goals, financialState);
+
   const scores = calculateScores(profile, transactions, null);
 
   const goalsWithTrajectory = goals.map((goal) => {
     const trajectory = calculateTrajectoryAge(
       profile,
-      // Engine works in pence; DB amounts are pounds.
-      { ...goal, target_amount: goal.target_amount * 100, saved_amount: goal.saved_amount * 100 },
+      // Engine works in pence; DB amounts are pounds. saved_amount comes
+      // from the derived attribution, already in pence.
+      {
+        ...goal,
+        target_amount: goal.target_amount * 100,
+        saved_amount: savedByGoal.get(goal.id) ?? 0,
+      },
       transactions,
       benchmarks,
       asOfDate,
@@ -109,18 +120,8 @@ export async function buildUserContext(
     };
   });
 
-  // monthlySurplus is goal-independent — pull from any trajectory or
-  // recompute when there are no goals.
-  const monthlySurplusPence =
-    goalsWithTrajectory.length > 0
-      ? calculateTrajectoryAge(
-          profile,
-          { ...goals[0], target_amount: goals[0].target_amount * 100, saved_amount: goals[0].saved_amount * 100 },
-          transactions,
-          benchmarks,
-          asOfDate,
-        ).monthlySurplus
-      : calculateMonthlySurplus(transactions, asOfDate);
+  // monthlySurplus is goal-independent.
+  const monthlySurplusPence = calculateMonthlySurplus(transactions, asOfDate);
 
   return {
     firstName: pickFirstName(user),

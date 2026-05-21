@@ -29,8 +29,10 @@ const COLLISION_WINDOW_MONTHS = 24;
 /**
  * Detect whether two goals collide — i.e. their completion windows are close
  * enough that funding both at once strains the same surplus. `monthsToGoal`
- * already reflects the user's `rough_target_date` (see engine), so this is a
- * straight comparison.
+ * now comes from a single allocated projection (see lib/usecases/trajectory
+ * and the projection kernel), so the two dates are funded from one shared
+ * surplus rather than each assuming 100% of it. It also already reflects the
+ * user's `rough_target_date` floor, so this is a straight comparison.
  */
 export function detectCollision(
   goal1: GoalEntry,

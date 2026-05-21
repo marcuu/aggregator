@@ -1,25 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { calculateTrajectoryAge } from "@/lib/trajectory/engine";
 import { calculateScores } from "@/lib/trajectory/scores";
 import type { BenchmarkRow } from "@/lib/trajectory/benchmarks";
 import { getTransactionsForUser } from "@/lib/truelayer/transactions";
 import { UserProfileSchema } from "@/lib/validators/profile";
-import { GoalSchema, type Goal } from "@/lib/validators/goals";
+import { GoalSchema } from "@/lib/validators/goals";
+import { getFinancialState, attributeSavingsToGoals } from "@/lib/finance/state";
+import { projectUserGoals } from "@/lib/usecases/trajectory";
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   return request.headers.get("authorization") === `Bearer ${secret}`;
-}
-
-function toEnginePence(goal: Goal): Goal {
-  return {
-    ...goal,
-    target_amount: goal.target_amount * 100,
-    saved_amount: goal.saved_amount * 100,
-  };
 }
 
 /**
@@ -34,7 +27,8 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createServiceClient();
-  const snapshotDate = new Date().toISOString().slice(0, 10);
+  const asOfDate = new Date();
+  const snapshotDate = asOfDate.toISOString().slice(0, 10);
 
   const [{ data: profileRows }, { data: benchmarkRows }] = await Promise.all([
     supabase.from("user_profiles").select("*").eq("onboarding_complete", true),
@@ -55,44 +49,59 @@ export async function GET(request: NextRequest) {
       .eq("user_id", profile.user_id)
       .eq("is_active", true);
 
+    const goals = (goalRows ?? []).map((g) => GoalSchema.parse(g));
     const transactions = await getTransactionsForUser(
       profile.user_id,
       supabase,
     );
 
-    const { data: accountRows } = await supabase
-      .from("ob_accounts")
-      .select("current_balance")
-      .eq("user_id", profile.user_id);
-    const currentBalancePence = (accountRows ?? [])
-      .reduce((sum, a) => sum + Math.round((a.current_balance ?? 0) * 100), 0);
+    // Derive current financial state once, then attribute to goals so the
+    // snapshot records a real moving saved_amount — the sparkline and drift
+    // detection had no signal while this was a constant 0.
+    const financialState = await getFinancialState(
+      profile.user_id,
+      supabase,
+      asOfDate,
+    );
+    const currentBalancePence = financialState.liquidBalance as number;
+    const savedByGoal = attributeSavingsToGoals(goals, financialState);
 
     const scores = calculateScores(profile, transactions, null, currentBalancePence);
 
-    for (const goalRow of goalRows ?? []) {
-      const goal = GoalSchema.parse(goalRow);
-      const trajectory = calculateTrajectoryAge(
-        profile,
-        toEnginePence(goal),
-        transactions,
-        benchmarks,
-        new Date(),
-      );
+    const goalTrajectories = projectUserGoals({
+      profile,
+      goals,
+      transactions,
+      benchmarks,
+      savedByGoal,
+      asOfDate,
+    });
 
-      const { error } = await supabase.from("trajectory_snapshots").upsert(
-        {
-          user_id: profile.user_id,
-          goal_id: goal.id,
-          snapshot_date: snapshotDate,
-          trajectory_age: trajectory.trajectoryAge,
-          monthly_surplus: trajectory.monthlySurplus,
-          saved_amount: trajectory.savedAmount,
-          spending_score: scores.spending,
-          growth_score: scores.growth,
-          borrowing_score: scores.borrowing,
-        },
-        { onConflict: "goal_id,snapshot_date" },
-      );
+    for (const { goal, trajectory } of goalTrajectories) {
+      const projectedDate = new Date(asOfDate);
+      projectedDate.setMonth(projectedDate.getMonth() + trajectory.monthsToGoal);
+      const projectedTargetDate = projectedDate.toISOString().slice(0, 10);
+
+      const [{ error }] = await Promise.all([
+        supabase.from("trajectory_snapshots").upsert(
+          {
+            user_id: profile.user_id,
+            goal_id: goal.id,
+            snapshot_date: snapshotDate,
+            trajectory_age: trajectory.trajectoryAge,
+            monthly_surplus: trajectory.monthlySurplus,
+            saved_amount: trajectory.savedAmount,
+            spending_score: scores.spending,
+            growth_score: scores.growth,
+            borrowing_score: scores.borrowing,
+          },
+          { onConflict: "goal_id,snapshot_date" },
+        ),
+        supabase
+          .from("goals")
+          .update({ projected_target_date: projectedTargetDate })
+          .eq("id", goal.id),
+      ]);
 
       if (error) {
         console.error("Snapshot cron: upsert failed:", error);

@@ -1,0 +1,97 @@
+import { describe, expect, it } from "vitest";
+
+import { project, type ProjectionGoal } from "@/lib/trajectory/projection";
+import { lawFastBenchmarks, makeGoal, makeProfile } from "./fixtures";
+
+const AS_OF = new Date("2026-05-18T00:00:00Z");
+
+function goalState(
+  id: string,
+  type: ProjectionGoal["goal"]["type"],
+  targetPence: number,
+  savedPence = 0,
+  earliestMonth = 0,
+): ProjectionGoal {
+  return {
+    goal: makeGoal({ id, type }),
+    targetPence,
+    savedPence,
+    earliestMonth,
+  };
+}
+
+describe("project — surplus allocation", () => {
+  it("sequential: funds the priority goal first, delaying the second", () => {
+    const goals = [
+      goalState("home", "home", 2_200_000),
+      goalState("wed", "wedding", 2_000_000),
+    ];
+    const result = project({
+      profile: makeProfile(),
+      goals,
+      benchmarks: lawFastBenchmarks,
+      monthlySurplusPence: 45_000,
+      asOfDate: AS_OF,
+      allocation: "sequential",
+    });
+
+    const home = result.perGoal.find((g) => g.goalId === "home")!;
+    const wed = result.perGoal.find((g) => g.goalId === "wed")!;
+
+    // Home (priority 0) completes first; wedding only starts funding after.
+    expect(home.monthsToGoal).toBeLessThan(wed.monthsToGoal);
+    // The wedding's completion is roughly home + its own funding window, far
+    // later than if it had owned the surplus alone (~37 months).
+    expect(wed.monthsToGoal).toBeGreaterThan(home.monthsToGoal + 20);
+  });
+
+  it("split: both goals progress simultaneously", () => {
+    const goals = [
+      goalState("home", "home", 2_200_000),
+      goalState("wed", "wedding", 2_000_000),
+    ];
+    const result = project({
+      profile: makeProfile(),
+      goals,
+      benchmarks: lawFastBenchmarks,
+      monthlySurplusPence: 45_000,
+      asOfDate: AS_OF,
+      allocation: "split",
+    });
+
+    const home = result.perGoal.find((g) => g.goalId === "home")!;
+    const wed = result.perGoal.find((g) => g.goalId === "wed")!;
+
+    // Splitting surplus proportional to remaining need funds both in
+    // parallel, so they complete within a narrow window of each other —
+    // unlike sequential funding which serialises them far apart.
+    expect(Math.abs(home.monthsToGoal - wed.monthsToGoal)).toBeLessThanOrEqual(12);
+  });
+
+  it("honours earliestMonth as a completion floor", () => {
+    const goals = [goalState("home", "home", 2_200_000, 2_200_000, 24)];
+    const result = project({
+      profile: makeProfile(),
+      goals,
+      benchmarks: lawFastBenchmarks,
+      monthlySurplusPence: 45_000,
+      asOfDate: AS_OF,
+      allocation: "sequential",
+    });
+    // Already funded, but the user parked it 24 months out.
+    expect(result.perGoal[0].monthsToGoal).toBe(24);
+    expect(result.perGoal[0].rawMonthsToGoal).toBe(0);
+  });
+
+  it("emits a series at least as long as minHorizonMonths with no goals", () => {
+    const result = project({
+      profile: makeProfile(),
+      goals: [],
+      benchmarks: lawFastBenchmarks,
+      monthlySurplusPence: 45_000,
+      asOfDate: AS_OF,
+      minHorizonMonths: 120,
+    });
+    expect(result.series.length).toBeGreaterThanOrEqual(121);
+  });
+});
