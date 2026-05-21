@@ -83,6 +83,43 @@ describe("project — surplus allocation", () => {
     expect(result.perGoal[0].rawMonthsToGoal).toBe(0);
   });
 
+  it("draws savings down when a goal completes, then rebuilds for the next", () => {
+    const goals = [
+      goalState("home", "home", 3_000_000),
+      goalState("ef", "emergency_fund", 1_000_000),
+    ];
+    const result = project({
+      profile: makeProfile(),
+      goals,
+      benchmarks: lawFastBenchmarks,
+      monthlySurplusPence: 60_000,
+      asOfDate: AS_OF,
+      allocation: "sequential",
+      minHorizonMonths: 120,
+    });
+
+    const home = result.perGoal.find((g) => g.goalId === "home")!;
+    const ef = result.perGoal.find((g) => g.goalId === "ef")!;
+
+    const savingsAt = (m: number) =>
+      result.series[m].cumulativeSavingsPence;
+
+    // Savings climbs while the home deposit is being funded...
+    expect(savingsAt(home.monthsToGoal - 1)).toBeGreaterThan(savingsAt(1));
+    // ...then drops the month the home completes (the deposit is spent).
+    expect(savingsAt(home.monthsToGoal)).toBeLessThan(
+      savingsAt(home.monthsToGoal - 1),
+    );
+    // The emergency fund then rebuilds savings before its own completion...
+    expect(savingsAt(ef.monthsToGoal - 1)).toBeGreaterThan(
+      savingsAt(home.monthsToGoal),
+    );
+    // ...and drains again once it too is met.
+    expect(savingsAt(ef.monthsToGoal)).toBeLessThan(
+      savingsAt(ef.monthsToGoal - 1),
+    );
+  });
+
   it("emits a series at least as long as minHorizonMonths with no goals", () => {
     const result = project({
       profile: makeProfile(),

@@ -150,8 +150,22 @@ export function project(inputs: ProjectionInputs): ProjectionResult {
   let debt = initialDebtBalancePence;
   const series: TimelinePoint[] = [];
 
-  // Month 0 snapshot — cumulative savings is the sum of starting balances.
-  series.push(buildPoint(0, currentAge, asOfDate, salary, sum(balances), debt));
+  // Saved-toward-goals at a given month, treating a goal's pot as spent (and
+  // therefore withdrawn from savings) once the month reaches its effective
+  // completion month. This is what makes the curve grow while a goal is being
+  // funded and then draw down when the goal is paid for, instead of plateauing.
+  const savedAtMonth = (month: number): number => {
+    let s = 0;
+    for (let i = 0; i < balances.length; i++) {
+      const c = completed[i];
+      const spent = c.month !== -1 && month >= c.month;
+      if (!spent) s += balances[i];
+    }
+    return s;
+  };
+
+  // Month 0 snapshot.
+  series.push(buildPoint(0, currentAge, asOfDate, salary, savedAtMonth(0), debt));
 
   for (let month = 1; month <= MAX_MONTHS; month++) {
     const ageNow = currentAge + month / 12;
@@ -220,7 +234,7 @@ export function project(inputs: ProjectionInputs): ProjectionResult {
     }
 
     debt = Math.max(0, debt - monthlyDebtRepaymentPence);
-    series.push(buildPoint(month, ageNow, asOfDate, salary, sum(balances), debt));
+    series.push(buildPoint(month, ageNow, asOfDate, salary, savedAtMonth(month), debt));
 
     const allDone = completed.every((c) => c.month !== -1 && month >= c.month);
     if (allDone) {
@@ -279,12 +293,6 @@ function buildPoint(
     cumulativeSavingsPence: Math.max(0, savingsPence),
     debtBalancePence: Math.max(0, debtPence),
   };
-}
-
-function sum(values: number[]): number {
-  let s = 0;
-  for (const v of values) s += v;
-  return s;
 }
 
 /** Age in fractional years at the given date. Falls back to 22 with no DOB. */

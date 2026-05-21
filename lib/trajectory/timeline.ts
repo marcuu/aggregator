@@ -10,8 +10,6 @@ import {
   type ProjectionGoal,
 } from "./projection";
 
-const MAX_HORIZON_MONTHS = 300; // 25 years
-
 export type TimelinePoint = {
   month: number;
   year: number;
@@ -115,8 +113,15 @@ export function buildTrajectoryTimeline(
     minHorizonMonths: 120,
   });
 
+  // Show every goal that actually completes within the projected series. A
+  // goal that never completes settles at the engine's hard horizon, which
+  // equals the last series month, so the strict `<` bound excludes it while
+  // keeping goals that complete late (the series always keeps headroom past
+  // the final completion). Using the series horizon instead of a hardcoded
+  // ceiling stops goals from silently vanishing off the timeline.
+  const horizonMonth = result.series[result.series.length - 1].month;
   const milestones: GoalMilestone[] = result.perGoal
-    .filter((p) => p.monthsToGoal > 0 && p.monthsToGoal < MAX_HORIZON_MONTHS)
+    .filter((p) => p.monthsToGoal >= 0 && p.monthsToGoal < horizonMonth)
     .map((p) => {
       const month = p.monthsToGoal;
       const point = result.series[Math.min(month, result.series.length - 1)];
