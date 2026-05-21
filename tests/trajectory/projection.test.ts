@@ -120,6 +120,32 @@ describe("project — surplus allocation", () => {
     );
   });
 
+  it("keeps saving after the last goal completes (residual pot grows)", () => {
+    const goals = [goalState("home", "home", 2_200_000)];
+    const result = project({
+      profile: makeProfile(),
+      goals,
+      benchmarks: lawFastBenchmarks,
+      monthlySurplusPence: 60_000,
+      asOfDate: AS_OF,
+      allocation: "sequential",
+      minHorizonMonths: 120,
+    });
+
+    const home = result.perGoal[0];
+    const savingsAt = (m: number) => result.series[m].cumulativeSavingsPence;
+
+    // The deposit is spent the month home completes, so savings dip...
+    expect(savingsAt(home.monthsToGoal)).toBeLessThan(
+      savingsAt(home.monthsToGoal - 1),
+    );
+    // ...but the user keeps saving afterward, so the curve climbs again
+    // rather than flatlining at zero.
+    const lastMonth = result.series[result.series.length - 1].month;
+    expect(savingsAt(lastMonth)).toBeGreaterThan(savingsAt(home.monthsToGoal));
+    expect(savingsAt(lastMonth)).toBeGreaterThan(savingsAt(home.monthsToGoal + 1));
+  });
+
   it("emits a series at least as long as minHorizonMonths with no goals", () => {
     const result = project({
       profile: makeProfile(),
