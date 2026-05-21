@@ -43,7 +43,7 @@ export default async function Reveal() {
   ]);
 
   if (!profileRow || !goalRows || goalRows.length === 0) {
-    redirect("/dashboard");
+    redirect("/");
   }
 
   const profile = UserProfileSchema.parse(profileRow);
