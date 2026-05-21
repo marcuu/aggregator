@@ -15,7 +15,7 @@ export function LoginButton() {
     setError(null);
 
     const supabase = createClient();
-    const redirectTo = searchParams.get("redirectTo") ?? "/dashboard";
+    const redirectTo = searchParams.get("redirectTo") ?? "/";
     const callbackUrl = new URL(
       "/api/auth/callback",
       window.location.origin,
