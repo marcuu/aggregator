@@ -183,13 +183,28 @@ export async function submitStep4(formData: FormData) {
 
   // Replace any goals from a previous run so the unique / max-active
   // constraints cannot trip on a redo of onboarding.
-  await supabase.from("goals").delete().eq("user_id", userId);
-  await supabase.from("goals").insert(goals);
+  const { error: deleteError } = await supabase
+    .from("goals")
+    .delete()
+    .eq("user_id", userId);
+  if (deleteError) {
+    throw new Error(`Failed to clear previous goals: ${deleteError.message}`);
+  }
 
-  await supabase
+  const { error: insertError } = await supabase.from("goals").insert(goals);
+  if (insertError) {
+    throw new Error(`Failed to save goals: ${insertError.message}`);
+  }
+
+  // Only mark onboarding complete once the goals are persisted — otherwise
+  // the user lands on an empty home with no goals and no trajectory.
+  const { error: profileError } = await supabase
     .from("user_profiles")
     .update({ onboarding_complete: true, onboarding_step: 5 })
     .eq("user_id", userId);
+  if (profileError) {
+    throw new Error(`Failed to complete onboarding: ${profileError.message}`);
+  }
 
   redirect("/onboarding/ob");
 }
