@@ -74,12 +74,21 @@ export function HomeScreen() {
 function Dashboard({ data, onRefresh }: { data: DashboardResponse; onRefresh: () => void }) {
   return (
     <>
-      <header>
-        <p className="text-[22px] font-medium">Trajectory</p>
-        <p className="mt-0.5 text-[13px]" style={{ color: "var(--text-secondary)" }}>
-          {SECTOR_LABEL[data.profile.sector]} ·{" "}
-          {TIER_LABEL[data.profile.trajectory_tier]}
-        </p>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[22px] font-medium">Trajectory</p>
+          <p className="mt-0.5 text-[13px]" style={{ color: "var(--text-secondary)" }}>
+            {SECTOR_LABEL[data.profile.sector]} ·{" "}
+            {TIER_LABEL[data.profile.trajectory_tier]}
+          </p>
+        </div>
+        <Link
+          href="/trajectory"
+          className="mt-1 shrink-0 text-[13px]"
+          style={{ color: "var(--text-tertiary)" }}
+        >
+          View timeline →
+        </Link>
       </header>
 
       {data.truelayerExpired && (
@@ -114,16 +123,7 @@ function Dashboard({ data, onRefresh }: { data: DashboardResponse; onRefresh: ()
 
       {data.goals.length > 0 && (
         <section>
-          <div className="flex items-baseline justify-between">
-            <h2 className="section-label">Your goals</h2>
-            <Link
-              href="/trajectory"
-              className="text-[12px]"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              View timeline →
-            </Link>
-          </div>
+          <h2 className="section-label">Your goals</h2>
           <div className="mt-3 flex flex-col gap-3">
             {data.goals.map((entry) => (
               <GoalCard
