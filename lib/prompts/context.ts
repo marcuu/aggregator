@@ -97,7 +97,8 @@ export async function buildUserContext(
   const financialState = await getFinancialState(user.id, supabase, asOfDate);
   const savedByGoal = attributeSavingsToGoals(goals, financialState);
 
-  const scores = calculateScores(profile, transactions, null);
+  const currentBalancePence = financialState.liquidBalance as number;
+  const scores = calculateScores(profile, transactions, null, currentBalancePence);
 
   const goalsWithTrajectory = goals.map((goal) => {
     const trajectory = calculateTrajectoryAge(
