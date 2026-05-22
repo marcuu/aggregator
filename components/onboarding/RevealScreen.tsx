@@ -64,7 +64,7 @@ export function RevealScreen({
       </p>
 
       <div className="mt-8 grid grid-cols-3 gap-2.5">
-        <StatCard label="Monthly surplus" value={gbp.format(monthlySurplusPence / 100)} />
+        <StatCard label="Monthly savings" value={gbp.format(monthlySurplusPence / 100)} />
         <StatCard label="Saved so far" value={gbp.format(savedAmountPence / 100)} />
         <StatCard
           label="Cohort"

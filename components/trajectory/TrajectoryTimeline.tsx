@@ -81,7 +81,7 @@ function ScrubCard({
           />
         ) : (
           <ScrubStat
-            label="Surplus"
+            label="Savings"
             value={monthlySurplus !== 0 ? fmt(monthlySurplus) + "/mo" : "—"}
             color={
               monthlySurplus > 0

@@ -3,11 +3,20 @@ import type { Transaction } from "./types";
 const DAYS_LOOKBACK = 90;
 
 /**
- * Average monthly investable surplus from recent transactions.
+ * Baseline share of income assumed to be saved each month. Projecting the
+ * full income - spend gap implied that every spare penny (and every future
+ * pay rise) went straight into goals — effectively a ~100% savings rate.
+ * We instead assume a sustainable 20% of income is saved.
+ */
+const BASELINE_SAVINGS_RATE = 0.2;
+
+/**
+ * Average monthly amount assumed to be saved toward goals.
  *
- * Surplus = income - spending, both measured over the lookback window and
- * excluding internal transfers (TrueLayer flags these as category
- * 'transfer'). The as-of date is passed in so the function stays pure.
+ * Computed as a fixed share (`BASELINE_SAVINGS_RATE`) of recent income,
+ * measured over the lookback window and excluding internal transfers
+ * (TrueLayer flags these as category 'transfer'). The as-of date is passed
+ * in so the function stays pure.
  */
 export function calculateMonthlySurplus(
   transactions: Transaction[],
@@ -27,10 +36,6 @@ export function calculateMonthlySurplus(
     .filter((t) => t.amount > 0 && t.category !== "transfer")
     .reduce((s, t) => s + t.amount, 0);
 
-  const netSpend = recent
-    .filter((t) => t.amount < 0 && t.category !== "transfer")
-    .reduce((s, t) => s + Math.abs(t.amount), 0);
-
   const months = DAYS_LOOKBACK / 30;
-  return Math.round((netIncome - netSpend) / months);
+  return Math.round((netIncome * BASELINE_SAVINGS_RATE) / months);
 }

@@ -148,6 +148,12 @@ export function project(inputs: ProjectionInputs): ProjectionResult {
 
   let salary = startingSalary;
   let debt = initialDebtBalancePence;
+  // Ongoing savings that are not earmarked for any goal: surplus left over
+  // after every goal is funded (and the small remainder in the month a goal
+  // completes). Unlike a goal pot it is never "spent" — it keeps compounding
+  // so the user goes on saving after their goals are met instead of the curve
+  // flatlining the moment the last goal completes.
+  let residual = 0;
   const series: TimelinePoint[] = [];
 
   // Saved-toward-goals at a given month, treating a goal's pot as spent (and
@@ -155,7 +161,7 @@ export function project(inputs: ProjectionInputs): ProjectionResult {
   // completion month. This is what makes the curve grow while a goal is being
   // funded and then draw down when the goal is paid for, instead of plateauing.
   const savedAtMonth = (month: number): number => {
-    let s = 0;
+    let s = residual;
     for (let i = 0; i < balances.length; i++) {
       const c = completed[i];
       const spent = c.month !== -1 && month >= c.month;
@@ -186,16 +192,20 @@ export function project(inputs: ProjectionInputs): ProjectionResult {
     // exactly. Results are rounded only when surfaced.
     const surplusThisMonth = monthlySurplusPence * salaryRatio;
 
-    // Apply monthly interest to every running goal balance.
+    // Apply monthly interest to every running goal balance and to the
+    // ongoing residual pot.
     for (let i = 0; i < balances.length; i++) {
       if (completed[i].month === -1) {
         balances[i] = balances[i] * (1 + SAVINGS_INTEREST_RATE / 12);
       }
     }
+    residual = residual * (1 + SAVINGS_INTEREST_RATE / 12);
 
     // Allocate this month's surplus.
     if (allocation === "sequential") {
-      // Find first not-yet-completed goal in priority order; give it everything.
+      // Fund not-yet-completed goals in priority order, cascading any leftover
+      // (a goal that completes mid-month) to the next. Whatever remains once
+      // every goal is funded keeps being saved into the residual pot.
       let remaining = surplusThisMonth;
       for (const i of orderedIndexes) {
         if (remaining <= 0) break;
@@ -204,9 +214,8 @@ export function project(inputs: ProjectionInputs): ProjectionResult {
         const give = Math.min(need, remaining);
         balances[i] += give;
         remaining -= give;
-        // Surplus stops here: sequential funds one goal at a time.
-        break;
       }
+      residual += Math.max(0, remaining);
     } else {
       // Split: proportional to remaining need.
       let totalNeed = 0;
@@ -221,6 +230,9 @@ export function project(inputs: ProjectionInputs): ProjectionResult {
           const share = Math.round((need / totalNeed) * surplusThisMonth);
           balances[i] += Math.min(need, share);
         }
+      } else {
+        // Every goal is funded — keep saving the surplus into the residual pot.
+        residual += surplusThisMonth;
       }
     }
 

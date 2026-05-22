@@ -38,8 +38,8 @@ function monthlyTransactions(
 }
 
 describe("calculateTrajectoryAge", () => {
-  it("returns ~28.4 for the canonical case (25yo, £40k, fast-track law, £22k deposit)", () => {
-    // income £3,000/mo, spend £2,550/mo => £450/mo surplus.
+  it("returns ~27.7 for the canonical case (25yo, £40k, fast-track law, £22k deposit)", () => {
+    // income £3,000/mo => assumed savings 20% = £600/mo. Spend is ignored.
     const transactions = monthlyTransactions(300_000, 255_000);
     const result = calculateTrajectoryAge(
       makeProfile(),
@@ -49,9 +49,9 @@ describe("calculateTrajectoryAge", () => {
       AS_OF,
     );
 
-    expect(result.trajectoryAge).toBeCloseTo(28.4, 1);
-    expect(result.monthsToGoal).toBe(41);
-    expect(result.monthlySurplus).toBe(45_000);
+    expect(result.trajectoryAge).toBeCloseTo(27.7, 1);
+    expect(result.monthsToGoal).toBe(32);
+    expect(result.monthlySurplus).toBe(60_000);
   });
 
   it("handles zero surplus without crashing — caps at the 30-year horizon", () => {
@@ -68,8 +68,9 @@ describe("calculateTrajectoryAge", () => {
     expect(Number.isFinite(result.trajectoryAge)).toBe(true);
   });
 
-  it("handles negative surplus — spending exceeds income", () => {
-    // income £2,000/mo, spend £3,000/mo => -£1,000/mo.
+  it("assumes 20% of income saved regardless of high spending", () => {
+    // income £2,000/mo, spend £3,000/mo. Spend is ignored: savings = 20% of
+    // income = £400/mo, so the goal is still reachable (not capped at horizon).
     const transactions = monthlyTransactions(200_000, 300_000);
     const result = calculateTrajectoryAge(
       makeProfile(),
@@ -79,8 +80,8 @@ describe("calculateTrajectoryAge", () => {
       AS_OF,
     );
 
-    expect(result.monthlySurplus).toBeLessThan(0);
-    expect(result.monthsToGoal).toBe(360);
+    expect(result.monthlySurplus).toBe(40_000);
+    expect(result.monthsToGoal).toBe(45);
   });
 
   it("returns the current age when the goal is already met", () => {
@@ -117,7 +118,7 @@ describe("calculateTrajectoryAge", () => {
   });
 
   it("honours a rough_target_date that pushes completion past the projection", () => {
-    // Projection alone would land at 41 months; user has parked the goal for
+    // Projection alone would land at 32 months; user has parked the goal for
     // ~5 years out — that later date is what actually competes for surplus.
     const transactions = monthlyTransactions(300_000, 255_000);
     const result = calculateTrajectoryAge(
@@ -142,7 +143,7 @@ describe("calculateTrajectoryAge", () => {
       AS_OF,
     );
 
-    expect(result.monthsToGoal).toBe(41);
+    expect(result.monthsToGoal).toBe(32);
   });
 
   it("does not crash when benchmarks are missing", () => {
